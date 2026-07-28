@@ -98,16 +98,22 @@ The result should be:
 container-artifacts/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl
 ```
 
-Copy both artifacts into the Docker build context. Install the launcher wheel
-after `jupyter-server-proxy` and the patched `codexapp` package are installed:
+For a fast Docker build, download the published launcher wheel after
+`jupyter-server-proxy` and the patched `codexapp` package are installed:
 
 ```dockerfile
-COPY jupyter_codexapp_proxy-0.1.0-py3-none-any.whl /tmp/
+ADD https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-b2417fc/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl \
+  /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl
 
-RUN pip install --no-cache-dir \
+RUN echo "bdf6b30177e1606aaa4e931e277a603cc6b7df9fb2caefa688e6e0cfb98a44e2  /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl" \
+      | sha256sum -c - \
+    && pip install --no-cache-dir \
       /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl \
     && rm -f /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl
 ```
+
+For an offline build, copy the locally built wheel into the Docker build
+context and replace the `ADD` instruction with `COPY`.
 
 No separate JupyterLab frontend build is required. Restarting the Jupyter
 single-user server discovers the Python entry point and adds the launcher

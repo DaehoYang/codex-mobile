@@ -19,6 +19,15 @@ python -m pip wheel \
 
 ## Install
 
+Install directly from the GitHub release:
+
+```bash
+python -m pip install \
+  https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-b2417fc/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl
+```
+
+Alternatively, install a locally built wheel:
+
 ```bash
 python -m pip install \
   container-artifacts/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl
