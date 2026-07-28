@@ -130,7 +130,7 @@ For a fast Docker build, download the published launcher wheel after
 `jupyter-server-proxy` and the patched `codexapp` package are installed:
 
 ```dockerfile
-ADD https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-b2417fc/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl \
+ADD https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-a29661d/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl \
   /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl
 
 RUN echo "bdf6b30177e1606aaa4e931e277a603cc6b7df9fb2caefa688e6e0cfb98a44e2  /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl" \
@@ -160,10 +160,10 @@ USER root
 
 ARG CODEX_CLI_VERSION=0.144.4
 
-ADD https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-b2417fc/codexapp-0.1.87-jupyterhub-b2417fc.tgz \
+ADD https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-a29661d/codexapp-0.1.87-jupyterhub-a29661d.tgz \
   /tmp/codexapp-patched.tgz
 
-RUN echo "6bc898cc0bf0bb03112c3313cc3b2bdd50403afbe33d3b32d663b4c4ac8eafd1  /tmp/codexapp-patched.tgz" \
+RUN echo "1075410bd537114a6d7091fd883f00ef54cf180831826ba4eacd638e28452301  /tmp/codexapp-patched.tgz" \
       | sha256sum -c - \
     && npm install -g \
       /tmp/codexapp-patched.tgz \
@@ -176,12 +176,12 @@ RUN echo "6bc898cc0bf0bb03112c3313cc3b2bdd50403afbe33d3b32d663b4c4ac8eafd1  /tmp
 # Restore the normal USER from the original Jupyter image here.
 ```
 
-The release is tied to source commit `b2417fc`. Change both the release URL
+The release is tied to source commit `a29661d`. Change both the release URL
 and checksum when selecting a newer deployment build.
 
-That release package predates the KaTeX equation-rendering change. Rebuild
-from the current deployment branch, or publish a newer package and update the
-URL and checksum, when equation rendering is required.
+This package includes the KaTeX equation-rendering change. The launcher wheel
+is unchanged from the earlier deployment build, but is duplicated in this
+release so both Docker downloads use one release tag.
 
 ## Rebuild from source inside Docker
 
