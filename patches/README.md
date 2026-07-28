@@ -79,6 +79,40 @@ Keep this tarball with the Docker build context. Do not use
 `npm install -g codexapp` in the runtime image because that downloads the
 unmodified public package.
 
+## Build the JupyterLab launcher
+
+The optional `jupyter-codexapp-proxy` package in this repository registers a
+**Codex Mobile** launcher tile and a named `jupyter-server-proxy` route. Build
+its wheel next to the Codex Mobile package:
+
+```bash
+python -m pip wheel \
+  --no-deps \
+  --wheel-dir container-artifacts \
+  ./jupyter-codexapp-proxy
+```
+
+The result should be:
+
+```text
+container-artifacts/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl
+```
+
+Copy both artifacts into the Docker build context. Install the launcher wheel
+after `jupyter-server-proxy` and the patched `codexapp` package are installed:
+
+```dockerfile
+COPY jupyter_codexapp_proxy-0.1.0-py3-none-any.whl /tmp/
+
+RUN pip install --no-cache-dir \
+      /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl \
+    && rm -f /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl
+```
+
+No separate JupyterLab frontend build is required. Restarting the Jupyter
+single-user server discovers the Python entry point and adds the launcher
+tile.
+
 ## Fast Docker build from the release package
 
 The recommended Dockerfile downloads the prebuilt package from the
@@ -218,6 +252,14 @@ Then open:
 
 ```text
 https://<jupyterhub>/user/<username>/proxy/4199/
+```
+
+When the launcher wheel is installed, open JupyterLab and select **Codex
+Mobile** instead. It starts the process on an automatically selected loopback
+port and opens:
+
+```text
+https://<jupyterhub>/user/<username>/codex/
 ```
 
 Verify:

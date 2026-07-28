@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jupyter-codexapp-proxy"
+version = "0.1.0"
+description = "Jupyter Server Proxy launcher integration for Codex Mobile"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+  { name = "Daeho Yang" },
+]
+dependencies = [
+  "jupyter-server-proxy>=4",
+]
+
+[project.entry-points.jupyter_serverproxy_servers]
+codex = "jupyter_codexapp_proxy:setup_codexapp"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+jupyter_codexapp_proxy = ["icons/*.svg"]
