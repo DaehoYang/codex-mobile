@@ -79,17 +79,49 @@ Keep this tarball with the Docker build context. Do not use
 `npm install -g codexapp` in the runtime image because that downloads the
 unmodified public package.
 
-## Add the package to an existing Jupyter image
+## Build directly from GitHub in a Dockerfile
 
-The image must provide Node.js 18 or newer and npm:
+Use a multi-stage build so Docker clones, tests, builds, and packs the
+deployment branch. The final image receives only the packed package.
+The existing Jupyter image must provide Node.js 18 or newer and npm:
 
 ```dockerfile
+FROM node:20-bookworm-slim AS codexapp-builder
+
+ARG PNPM_VERSION=10.34.5
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      git \
+      g++ \
+      make \
+      python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+RUN git clone \
+      --branch personal/jupyterhub-deployment \
+      https://github.com/DaehoYang/codex-mobile.git
+
+WORKDIR /build/codex-mobile
+
+RUN npx --yes pnpm@${PNPM_VERSION} install --no-frozen-lockfile \
+    && npx --yes pnpm@${PNPM_VERSION} run test:unit \
+    && npx --yes pnpm@${PNPM_VERSION} run build \
+    && mkdir -p /artifacts \
+    && npx --yes pnpm@${PNPM_VERSION} pack \
+      --pack-destination /artifacts
+
 FROM <existing-jupyter-gpu-image>
 
 USER root
 
 ARG CODEX_CLI_VERSION=0.144.4
-COPY container-artifacts/codexapp-0.1.87.tgz /tmp/codexapp-patched.tgz
+COPY --from=codexapp-builder \
+  /artifacts/codexapp-*.tgz \
+  /tmp/codexapp-patched.tgz
 
 RUN npm install -g \
       /tmp/codexapp-patched.tgz \
@@ -102,9 +134,10 @@ RUN npm install -g \
 # Restore the normal USER from the original Jupyter image here.
 ```
 
-If npm needs to compile the optional `node-pty` dependency, install `python3`,
-`make`, and `g++` during the `npm install` layer. `node-pty` is required for
-the integrated terminal.
+The builder installs `python3`, `make`, and `g++` for native dependencies.
+If the final `npm install -g` also needs to compile the optional `node-pty`
+dependency, make the same tools available in the runtime stage during that
+layer. `node-pty` is required for the integrated terminal.
 
 Do not add `EXPOSE 4199` or publish the Codex Mobile port.
 `jupyter-server-proxy` and `codexapp` should run in the same container or
