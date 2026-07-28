@@ -1,0 +1,846 @@
+diff --git a/index.html b/index.html
+index 6c68bf5..b224796 100644
+--- a/index.html
++++ b/index.html
+@@ -7,10 +7,10 @@
+     <meta name="apple-mobile-web-app-capable" content="yes" />
+     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+     <meta name="apple-mobile-web-app-title" content="Codex Web" />
+-    <link rel="manifest" href="/manifest.webmanifest" />
+-    <link rel="icon" type="image/svg+xml" href="/icons/codexui-icon.svg" />
+-    <link rel="icon" type="image/png" sizes="192x192" href="/icons/pwa-192x192.png" />
+-    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
++    <link rel="manifest" href="./manifest.webmanifest" />
++    <link rel="icon" type="image/svg+xml" href="./icons/codexui-icon.svg" />
++    <link rel="icon" type="image/png" sizes="192x192" href="./icons/pwa-192x192.png" />
++    <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
+     <title>Codex Web</title>
+   </head>
+   <body class="bg-slate-950">
+diff --git a/public/manifest.webmanifest b/public/manifest.webmanifest
+index d621a33..37ee0de 100644
+--- a/public/manifest.webmanifest
++++ b/public/manifest.webmanifest
+@@ -2,32 +2,32 @@
+   "name": "Codex Web",
+   "short_name": "Codex Web",
+   "description": "A lightweight web interface for Codex that can be installed like an app in Chrome.",
+-  "start_url": "/",
+-  "scope": "/",
++  "start_url": "./",
++  "scope": "./",
+   "display": "standalone",
+   "background_color": "#020617",
+   "theme_color": "#020617",
+   "icons": [
+     {
+-      "src": "/icons/pwa-192x192.png",
++      "src": "./icons/pwa-192x192.png",
+       "sizes": "192x192",
+       "type": "image/png",
+       "purpose": "any"
+     },
+     {
+-      "src": "/icons/pwa-512x512.png",
++      "src": "./icons/pwa-512x512.png",
+       "sizes": "512x512",
+       "type": "image/png",
+       "purpose": "any"
+     },
+     {
+-      "src": "/icons/apple-touch-icon.png",
++      "src": "./icons/apple-touch-icon.png",
+       "sizes": "180x180",
+       "type": "image/png",
+       "purpose": "any"
+     },
+     {
+-      "src": "/icons/maskable-512x512.png",
++      "src": "./icons/maskable-512x512.png",
+       "sizes": "512x512",
+       "type": "image/png",
+       "purpose": "maskable"
+diff --git a/public/sw.js b/public/sw.js
+index ad1fac6..5fdddb5 100644
+--- a/public/sw.js
++++ b/public/sw.js
+@@ -1,11 +1,20 @@
+-const CACHE_NAME = 'codexweb-shell-v2'
+-const APP_SHELL_PATHS = ['/', '/manifest.webmanifest']
++const CACHE_NAME = 'codexweb-shell-v3'
++const APP_SCOPE_URL = new URL(self.registration.scope)
++const appUrl = (path) => new URL(path.replace(/^\/+/u, ''), APP_SCOPE_URL)
++const APP_SHELL_URLS = [APP_SCOPE_URL.href, appUrl('manifest.webmanifest').href]
++const MANIFEST_PATHNAME = appUrl('manifest.webmanifest').pathname
+ const STATIC_DESTINATIONS = new Set(['document', 'script', 'style', 'image', 'font'])
+-const BYPASS_PREFIXES = ['/codex-api/', '/codex-local-image', '/codex-local-file', '/codex-local-browse/', '/codex-local-edit/']
++const BYPASS_PREFIXES = [
++  'codex-api/',
++  'codex-local-image',
++  'codex-local-file',
++  'codex-local-browse/',
++  'codex-local-edit/',
++].map((path) => appUrl(path).pathname)
+ 
+ self.addEventListener('install', (event) => {
+   event.waitUntil(
+-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL_PATHS)),
++    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL_URLS)),
+   )
+   self.skipWaiting()
+ })
+@@ -41,7 +50,7 @@ self.addEventListener('fetch', (event) => {
+     return
+   }
+ 
+-  if (STATIC_DESTINATIONS.has(request.destination) || url.pathname === '/manifest.webmanifest') {
++  if (STATIC_DESTINATIONS.has(request.destination) || url.pathname === MANIFEST_PATHNAME) {
+     event.respondWith(staleWhileRevalidate(request))
+   }
+ })
+@@ -50,10 +59,10 @@ async function networkFirstNavigation(request) {
+   const cache = await caches.open(CACHE_NAME)
+   try {
+     const response = await fetch(request)
+-    cache.put('/', response.clone())
++    cache.put(APP_SCOPE_URL.href, response.clone())
+     return response
+   } catch {
+-    return (await cache.match('/')) || Response.error()
++    return (await cache.match(APP_SCOPE_URL.href)) || Response.error()
+   }
+ }
+ 
+diff --git a/src/App.vue b/src/App.vue
+index c39b2cd..d89aa4b 100644
+--- a/src/App.vue
++++ b/src/App.vue
+@@ -1189,6 +1189,7 @@ import { useDesktopState } from './composables/useDesktopState'
+ import { useMobile } from './composables/useMobile'
+ import { useUiLanguage } from './composables/useUiLanguage'
+ import { useFeedbackDiagnostics } from './composables/useFeedbackDiagnostics'
++import { appHttpUrl } from './api/appUrl'
+ import {
+   checkoutGitBranch,
+   cloneGithubRepository,
+@@ -2787,7 +2788,7 @@ function onBrowseThreadFiles(threadId: string): void {
+     }
+   }
+   if (!targetCwd || typeof window === 'undefined') return
+-  window.open(`/codex-local-browse${encodeURI(targetCwd)}`, '_blank', 'noopener,noreferrer')
++  window.open(appHttpUrl(`/codex-local-browse${encodeURI(targetCwd)}`), '_blank', 'noopener,noreferrer')
+ }
+ 
+ function getProjectCwd(projectName: string): string {
+@@ -2819,7 +2820,7 @@ function toWorktreeFolderNameDraft(projectName: string): string {
+ function onBrowseProjectFiles(projectName: string): void {
+   const targetCwd = getProjectCwd(projectName)
+   if (!targetCwd || typeof window === 'undefined') return
+-  window.open(`/codex-local-browse${encodeURI(targetCwd)}`, '_blank', 'noopener,noreferrer')
++  window.open(appHttpUrl(`/codex-local-browse${encodeURI(targetCwd)}`), '_blank', 'noopener,noreferrer')
+ }
+ 
+ async function onSaveProject(projectName: string): Promise<void> {
+diff --git a/src/api/appUrl.test.ts b/src/api/appUrl.test.ts
+new file mode 100644
+index 0000000..8b90c89
+--- /dev/null
++++ b/src/api/appUrl.test.ts
+@@ -0,0 +1,63 @@
++import { afterEach, describe, expect, it, vi } from 'vitest'
++import { appFetch, appHttpUrl, appWebSocketUrl, isAppPathname } from './appUrl'
++
++function setBrowserLocation(baseURI: string, protocol = 'https:'): void {
++  vi.stubGlobal('document', { baseURI })
++  vi.stubGlobal('location', { protocol })
++}
++
++afterEach(() => {
++  vi.unstubAllGlobals()
++})
++
++describe('app URL helpers', () => {
++  it('resolves HTTP paths below the JupyterHub application base', () => {
++    setBrowserLocation('https://host/user/alice/codex/')
++
++    expect(appHttpUrl('codex-api/rpc')).toBe(
++      'https://host/user/alice/codex/codex-api/rpc',
++    )
++  })
++
++  it('removes leading slashes and document query/hash state', () => {
++    setBrowserLocation('https://host/user/alice/codex?from=hub#/thread/123')
++
++    expect(appHttpUrl('/codex-api/rpc')).toBe(
++      'https://host/user/alice/codex/codex-api/rpc',
++    )
++  })
++
++  it('uses the same base path for secure WebSockets', () => {
++    setBrowserLocation('https://host/user/alice/codex/')
++
++    expect(appWebSocketUrl('/codex-api/ws')).toBe(
++      'wss://host/user/alice/codex/codex-api/ws',
++    )
++  })
++
++  it('recognizes both proxied and legacy root-relative application paths', () => {
++    setBrowserLocation('https://host/user/alice/codex/')
++
++    expect(isAppPathname('/user/alice/codex/codex-local-image', '/codex-local-image')).toBe(true)
++    expect(isAppPathname('/codex-local-image', '/codex-local-image')).toBe(true)
++    expect(isAppPathname('/user/bob/codex/codex-local-image', '/codex-local-image')).toBe(false)
++  })
++
++  it('keeps root-relative paths when no browser document exists', () => {
++    expect(appHttpUrl('/codex-api/rpc')).toBe('/codex-api/rpc')
++    expect(appWebSocketUrl('/codex-api/ws')).toBe('ws://localhost/codex-api/ws')
++  })
++
++  it('routes root-relative fetches through the application base', async () => {
++    setBrowserLocation('http://host/user/alice/codex/', 'http:')
++    const fetchMock = vi.fn().mockResolvedValue(new Response())
++    vi.stubGlobal('fetch', fetchMock)
++
++    await appFetch('/codex-api/rpc', { method: 'POST' })
++
++    expect(fetchMock).toHaveBeenCalledWith(
++      'http://host/user/alice/codex/codex-api/rpc',
++      { method: 'POST' },
++    )
++  })
++})
+diff --git a/src/api/appUrl.ts b/src/api/appUrl.ts
+new file mode 100644
+index 0000000..d1a47d0
+--- /dev/null
++++ b/src/api/appUrl.ts
+@@ -0,0 +1,44 @@
++function appBaseUrl(): URL | null {
++  if (typeof document === 'undefined') return null
++
++  const base = new URL(document.baseURI)
++  base.hash = ''
++  base.search = ''
++  if (!base.pathname.endsWith('/')) {
++    base.pathname += '/'
++  }
++  return base
++}
++
++function normalizeAppPath(path: string): string {
++  return path.replace(/^\/+/u, '')
++}
++
++export function appHttpUrl(path: string): string {
++  const normalizedPath = normalizeAppPath(path)
++  const base = appBaseUrl()
++  return base ? new URL(normalizedPath, base).toString() : `/${normalizedPath}`
++}
++
++export function appWebSocketUrl(path: string): string {
++  const url = new URL(appHttpUrl(path), 'http://localhost')
++  if (typeof location !== 'undefined') {
++    url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
++  } else {
++    url.protocol = 'ws:'
++  }
++  return url.toString()
++}
++
++export function isAppPathname(pathname: string, appPath: string): boolean {
++  const rootPathname = new URL(`http://localhost/${normalizeAppPath(appPath)}`).pathname
++  const resolvedPathname = new URL(appHttpUrl(appPath), 'http://localhost').pathname
++  return pathname === rootPathname || pathname === resolvedPathname
++}
++
++export function appFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
++  const resolvedInput = typeof input === 'string' && input.startsWith('/')
++    ? appHttpUrl(input)
++    : input
++  return globalThis.fetch(resolvedInput, init)
++}
+diff --git a/src/api/codexGateway.ts b/src/api/codexGateway.ts
+index e66e463..395156d 100644
+--- a/src/api/codexGateway.ts
++++ b/src/api/codexGateway.ts
+@@ -7,6 +7,7 @@ import {
+   subscribeRpcNotifications,
+   type RpcNotification,
+ } from './codexRpcClient'
++import { appFetch as fetch, appHttpUrl, isAppPathname } from './appUrl'
+ import type {
+   CollaborationModeListResponse,
+   ConfigReadResponse,
+@@ -1755,7 +1756,7 @@ function extractLocalImagePathFromUrl(value: string): string | null {
+   if (!value) return null
+   try {
+     const parsed = new URL(value, 'http://localhost')
+-    if (parsed.pathname !== '/codex-local-image') return null
++    if (!isAppPathname(parsed.pathname, '/codex-local-image')) return null
+     const path = parsed.searchParams.get('path')?.trim() ?? ''
+     return path.length > 0 ? path : null
+   } catch {
+@@ -3081,7 +3082,7 @@ export async function openProjectRoot(path: string, options?: { createIfMissing?
+ 
+ export function getProjectZipDownloadUrl(cwd: string): string {
+   const query = new URLSearchParams({ cwd })
+-  return `/codex-api/project-zip?${query.toString()}`
++  return appHttpUrl(`/codex-api/project-zip?${query.toString()}`)
+ }
+ 
+ function readDownloadFileName(response: Response, fallback: string): string {
+diff --git a/src/api/codexRpcClient.ts b/src/api/codexRpcClient.ts
+index 1a779ab..0076b0f 100644
+--- a/src/api/codexRpcClient.ts
++++ b/src/api/codexRpcClient.ts
+@@ -1,4 +1,5 @@
+ import type { RpcEnvelope, RpcMethodCatalog } from '../types/codex'
++import { appFetch as fetch, appHttpUrl, appWebSocketUrl } from './appUrl'
+ import { CodexApiError, extractErrorMessage } from './codexErrors'
+ 
+ type RpcRequestBody = {
+@@ -191,7 +192,7 @@ export function subscribeRpcNotifications(onNotification: (value: RpcNotificatio
+   const attachSse = (attempt = 0) => {
+     if (typeof EventSource === 'undefined' || closed) return
+     cleanup?.()
+-    const source = new EventSource('/codex-api/events')
++    const source = new EventSource(appHttpUrl('/codex-api/events'))
+     let isConnectionClosed = false
+ 
+     source.onmessage = (event) => {
+@@ -233,8 +234,7 @@ export function subscribeRpcNotifications(onNotification: (value: RpcNotificatio
+     }
+ 
+     cleanup?.()
+-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+-    const socket = new WebSocket(`${protocol}//${window.location.host}/codex-api/ws`)
++    const socket = new WebSocket(appWebSocketUrl('/codex-api/ws'))
+     let didOpen = false
+     let intentionallyClosed = false
+     let fallbackTimer: number | null = window.setTimeout(() => {
+diff --git a/src/api/normalizers/v2.ts b/src/api/normalizers/v2.ts
+index 0a47318..e0b3c75 100644
+--- a/src/api/normalizers/v2.ts
++++ b/src/api/normalizers/v2.ts
+@@ -17,6 +17,7 @@ import type {
+   UiProjectGroup,
+   UiThread,
+ } from '../../types/codex'
++import { appHttpUrl } from '../appUrl'
+ import { normalizePathForComparison, normalizePathForUi, toProjectName } from '../../pathUtils.js'
+ 
+ function toIso(seconds: number): string {
+@@ -74,7 +75,7 @@ function extractCodexUserRequestText(value: string): string {
+ }
+ 
+ function toLocalImageUrl(path: string): string {
+-  return `/codex-local-image?path=${encodeURIComponent(path)}`
++  return appHttpUrl(`/codex-local-image?path=${encodeURIComponent(path)}`)
+ }
+ 
+ function toImageGenerationUrl(value: string): string {
+diff --git a/src/cli/index.ts b/src/cli/index.ts
+index 6ca9475..8bab995 100644
+--- a/src/cli/index.ts
++++ b/src/cli/index.ts
+@@ -409,7 +409,11 @@ async function startCloudflaredTunnel(command: string, localPort: number): Promi
+   })
+ }
+ 
+-function listenWithFallback(server: ReturnType<typeof createServer>, startPort: number): Promise<number> {
++function listenWithFallback(
++  server: ReturnType<typeof createServer>,
++  startPort: number,
++  host: string,
++): Promise<number> {
+   return new Promise((resolve, reject) => {
+     const attempt = (port: number) => {
+       const onError = (error: NodeJS.ErrnoException) => {
+@@ -427,7 +431,7 @@ function listenWithFallback(server: ReturnType<typeof createServer>, startPort:
+ 
+       server.once('error', onError)
+       server.once('listening', onListening)
+-      server.listen(port, '0.0.0.0')
++      server.listen(port, host)
+     }
+ 
+     attempt(startPort)
+@@ -494,6 +498,7 @@ async function addProjectOnly(projectPath: string): Promise<void> {
+ }
+ 
+ async function startServer(options: {
++  host: string
+   port: string
+   password: string | boolean
+   tunnel: boolean
+@@ -537,7 +542,7 @@ async function startServer(options: {
+   const { app, dispose, attachWebSocket } = createApp({ password })
+   const server = createServer(app)
+   attachWebSocket(server)
+-  const port = await listenWithFallback(server, requestedPort)
++  const port = await listenWithFallback(server, requestedPort, options.host)
+   process.env.CODEXUI_SERVER_PORT = String(port)
+   let tunnelChild: ReturnType<typeof spawn> | null = null
+   let tunnelUrl: string | null = null
+@@ -557,17 +562,21 @@ async function startServer(options: {
+     }
+   }
+ 
++  const hostForUrl = options.host.includes(':') ? `[${options.host}]` : options.host
++  const isWildcardHost = options.host === '0.0.0.0' || options.host === '::'
+   const lines = [
+     '',
+     'Codex Web Local is running!',
+     `  Version:  ${version}`,
+     '  GitHub:   https://github.com/friuns2/codexui',
+     '',
+-    `  Bind:     http://0.0.0.0:${String(port)}`,
++    `  Bind:     http://${hostForUrl}:${String(port)}`,
+     `  Codex sandbox: ${runtimeConfig.sandboxMode}`,
+     `  Approval policy: ${runtimeConfig.approvalPolicy}`,
+   ]
+-  const accessUrls = getAccessibleUrls(port)
++  const accessUrls = isWildcardHost
++    ? getAccessibleUrls(port)
++    : [`http://${hostForUrl}:${String(port)}`]
+   if (accessUrls.length > 0) {
+     lines.push(`  Local:    ${accessUrls[0]}`)
+     for (const accessUrl of accessUrls.slice(1)) {
+@@ -629,6 +638,7 @@ async function runLogin() {
+ program
+   .argument('[projectPath]', 'project directory to open on launch')
+   .option('--open-project <path>', 'open project directory on launch (Codex desktop parity)')
++  .option('--host <host>', 'host address to bind', '0.0.0.0')
+   .option('-p, --port <port>', 'port to listen on', '5900')
+   .option('--password <pass>', 'set a specific password')
+   .option('--no-password', 'disable password protection')
+@@ -645,6 +655,7 @@ program
+   .action(async (
+     projectPath: string | undefined,
+     opts: {
++      host: string
+       port: string
+       password: string | boolean
+       tunnel: boolean
+diff --git a/src/components/content/DirectoryHub.vue b/src/components/content/DirectoryHub.vue
+index beff553..0b2c1cc 100644
+--- a/src/components/content/DirectoryHub.vue
++++ b/src/components/content/DirectoryHub.vue
+@@ -660,6 +660,7 @@
+ <script setup lang="ts">
+ import { computed, onMounted, ref, watch } from 'vue'
+ import { useRoute, useRouter } from 'vue-router'
++import { appHttpUrl } from '../../api/appUrl'
+ import {
+   getDirectoryComposioStatus,
+   getMethodCatalog,
+@@ -1169,10 +1170,10 @@ function showToast(text: string, type: 'success' | 'error' = 'success'): void {
+ 
+ function localAssetSrc(path: string): string {
+   if (!path) return ''
+-  if (path.startsWith('connectors://')) return `/codex-api/connector-logo?src=${encodeURIComponent(path)}`
++  if (path.startsWith('connectors://')) return appHttpUrl(`/codex-api/connector-logo?src=${encodeURIComponent(path)}`)
+   if (/^https?:\/\//i.test(path) || path.startsWith('data:')) return path
+   if (!path.startsWith('/')) return ''
+-  return `/codex-local-image?path=${encodeURIComponent(path)}`
++  return appHttpUrl(`/codex-local-image?path=${encodeURIComponent(path)}`)
+ }
+ 
+ function pluginIconSrc(plugin: DirectoryPluginSummary | null): string {
+diff --git a/src/components/content/SkillCard.vue b/src/components/content/SkillCard.vue
+index bebd143..5d99e27 100644
+--- a/src/components/content/SkillCard.vue
++++ b/src/components/content/SkillCard.vue
+@@ -44,6 +44,7 @@
+ 
+ <script setup lang="ts">
+ import { computed } from 'vue'
++import { appHttpUrl } from '../../api/appUrl'
+ import { useUiLanguage } from '../../composables/useUiLanguage'
+ import IconTablerFolder from '../icons/IconTablerFolder.vue'
+ 
+@@ -86,7 +87,7 @@ const skillDirPath = computed(() => {
+ function onBrowse(): void {
+   const dir = skillDirPath.value
+   if (!dir) return
+-  window.open(`/codex-local-browse${encodeURI(dir)}`, '_blank', 'noopener,noreferrer')
++  window.open(appHttpUrl(`/codex-local-browse${encodeURI(dir)}`), '_blank', 'noopener,noreferrer')
+ }
+ 
+ const publishedLabel = computed(() => {
+diff --git a/src/components/content/SkillDetailModal.vue b/src/components/content/SkillDetailModal.vue
+index c58e861..7d1295c 100644
+--- a/src/components/content/SkillDetailModal.vue
++++ b/src/components/content/SkillDetailModal.vue
+@@ -91,6 +91,7 @@
+ 
+ <script setup lang="ts">
+ import { computed, ref, watch } from 'vue'
++import { appFetch as fetch, appHttpUrl } from '../../api/appUrl'
+ import { useUiLanguage } from '../../composables/useUiLanguage'
+ import IconTablerX from '../icons/IconTablerX.vue'
+ 
+@@ -216,7 +217,7 @@ function onTry(): void {
+ function onBrowseFiles(): void {
+   const dir = skillDirPath.value
+   if (!dir) return
+-  window.open(`/codex-local-browse${encodeURI(dir)}`, '_blank', 'noopener,noreferrer')
++  window.open(appHttpUrl(`/codex-local-browse${encodeURI(dir)}`), '_blank', 'noopener,noreferrer')
+ }
+ </script>
+ 
+diff --git a/src/components/content/SkillsHub.vue b/src/components/content/SkillsHub.vue
+index addcb63..c6c15ec 100644
+--- a/src/components/content/SkillsHub.vue
++++ b/src/components/content/SkillsHub.vue
+@@ -146,6 +146,7 @@
+ 
+ <script setup lang="ts">
+ import { computed, onMounted, ref, watch } from 'vue'
++import { appFetch as fetch } from '../../api/appUrl'
+ import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
+ import SkillCard from './SkillCard.vue'
+ import SkillDetailModal, { type HubSkill } from './SkillDetailModal.vue'
+diff --git a/src/components/content/ThreadComposer.vue b/src/components/content/ThreadComposer.vue
+index 9be5a35..65d55a4 100644
+--- a/src/components/content/ThreadComposer.vue
++++ b/src/components/content/ThreadComposer.vue
+@@ -391,6 +391,7 @@
+ 
+ <script setup lang="ts">
+ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
++import { appHttpUrl } from '../../api/appUrl'
+ import type {
+   CollaborationModeKind,
+   CollaborationModeOption,
+@@ -1214,7 +1215,7 @@ function skillMarkdownPath(path: string): string {
+ function openSkillMarkdown(skill: SkillItem): void {
+   const markdownPath = skillMarkdownPath(skill.path)
+   if (!markdownPath || typeof window === 'undefined') return
+-  window.open(`/codex-local-browse${encodeURI(markdownPath)}`, '_blank', 'noopener,noreferrer')
++  window.open(appHttpUrl(`/codex-local-browse${encodeURI(markdownPath)}`), '_blank', 'noopener,noreferrer')
+ }
+ 
+ function removeFileAttachment(fsPath: string): void {
+@@ -1347,7 +1348,7 @@ async function attachImageFile(file: File, sessionToken: number): Promise<void>
+       {
+         id: createAttachmentId(),
+         name: normalizedFile.name,
+-        url: `/codex-local-image?path=${encodeURIComponent(serverPath)}`,
++        url: appHttpUrl(`/codex-local-image?path=${encodeURIComponent(serverPath)}`),
+       },
+     ]
+     recordAttachmentBatchResult('success')
+diff --git a/src/components/content/ThreadConversation.vue b/src/components/content/ThreadConversation.vue
+index 8656017..65c8244 100644
+--- a/src/components/content/ThreadConversation.vue
++++ b/src/components/content/ThreadConversation.vue
+@@ -919,6 +919,7 @@
+ <script setup lang="ts">
+ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+ import type { UiFileChange, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
++import { appHttpUrl } from '../../api/appUrl'
+ import { updateThreadFileChanges } from '../../api/codexGateway'
+ import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
+ import { useMobile } from '../../composables/useMobile'
+@@ -2845,20 +2846,22 @@ function toRenderableImageUrl(value: string): string {
+     normalized.startsWith('data:') ||
+     normalized.startsWith('blob:') ||
+     normalized.startsWith('http://') ||
+-    normalized.startsWith('https://') ||
+-    normalized.startsWith('/codex-local-image?')
++    normalized.startsWith('https://')
+   ) {
+     return normalized
+   }
++  if (normalized.startsWith('/codex-local-image?')) {
++    return appHttpUrl(normalized)
++  }
+ 
+   if (normalized.startsWith('file://')) {
+-    return `/codex-local-image?path=${encodeURIComponent(normalized)}`
++    return appHttpUrl(`/codex-local-image?path=${encodeURIComponent(normalized)}`)
+   }
+ 
+   const looksLikeUnixAbsolute = normalized.startsWith('/')
+   const looksLikeWindowsAbsolute = /^[A-Za-z]:[\\/]/u.test(normalized)
+   if (looksLikeUnixAbsolute || looksLikeWindowsAbsolute) {
+-    return `/codex-local-image?path=${encodeURIComponent(normalized)}`
++    return appHttpUrl(`/codex-local-image?path=${encodeURIComponent(normalized)}`)
+   }
+ 
+   return normalized
+@@ -2877,7 +2880,7 @@ function toBrowseUrl(pathValue: string): string {
+ 
+   if (looksLikeAbsolutePath(resolved)) {
+     const normalizedResolved = resolved.startsWith('/') ? resolved : `/${resolved}`
+-    return `/codex-local-browse${encodeURI(normalizedResolved)}`
++    return appHttpUrl(`/codex-local-browse${encodeURI(normalizedResolved)}`)
+   }
+ 
+   return '#'
+@@ -2893,9 +2896,10 @@ function toEditUrlFromBrowseHref(href: string): string {
+   if (!normalizedHref) return ''
+   try {
+     const resolved = new URL(normalizedHref, window.location.href)
+-    if (!resolved.pathname.startsWith('/codex-local-browse')) return ''
+-    const editPath = `/codex-local-edit${resolved.pathname.slice('/codex-local-browse'.length)}`
+-    return `${editPath}${resolved.search}${resolved.hash}`
++    const browsePath = new URL(appHttpUrl('/codex-local-browse')).pathname
++    if (!resolved.pathname.startsWith(browsePath)) return ''
++    const editPath = `/codex-local-edit${resolved.pathname.slice(browsePath.length)}`
++    return appHttpUrl(`${editPath}${resolved.search}${resolved.hash}`)
+   } catch {
+     return ''
+   }
+diff --git a/src/composables/useDesktopState.ts b/src/composables/useDesktopState.ts
+index 50244a7..28ecbf0 100644
+--- a/src/composables/useDesktopState.ts
++++ b/src/composables/useDesktopState.ts
+@@ -38,6 +38,7 @@ import {
+   type WorkspaceRootsState,
+ } from '../api/codexGateway'
+ import { CodexApiError } from '../api/codexErrors'
++import { appHttpUrl, isAppPathname } from '../api/appUrl'
+ import { normalizeFileChangeStatus, toUiFileChanges } from '../api/normalizers/v2'
+ import type {
+   CollaborationModeKind,
+@@ -1483,7 +1484,7 @@ export function useDesktopState() {
+   function extractLocalImagePathFromUrl(value: string): string {
+     try {
+       const parsed = new URL(value, 'http://localhost')
+-      if (parsed.pathname !== '/codex-local-image') return ''
++      if (!isAppPathname(parsed.pathname, '/codex-local-image')) return ''
+       return parsed.searchParams.get('path')?.trim() ?? ''
+     } catch {
+       return ''
+@@ -3524,7 +3525,7 @@ export function useDesktopState() {
+   }
+ 
+   function toLocalImageUrl(path: string): string {
+-    return `/codex-local-image?path=${encodeURIComponent(path)}`
++    return appHttpUrl(`/codex-local-image?path=${encodeURIComponent(path)}`)
+   }
+ 
+   function toImageGenerationUrl(value: string): string {
+diff --git a/src/composables/useDictation.ts b/src/composables/useDictation.ts
+index 47f8388..92ce738 100644
+--- a/src/composables/useDictation.ts
++++ b/src/composables/useDictation.ts
+@@ -1,4 +1,5 @@
+ import { onBeforeUnmount, ref } from 'vue'
++import { appFetch as fetch } from '../api/appUrl'
+ 
+ export type DictationState = 'idle' | 'recording' | 'transcribing'
+ const DICTATION_SILENCE_THRESHOLD = 0.0025
+diff --git a/src/composables/useGithubSkillsSync.ts b/src/composables/useGithubSkillsSync.ts
+index 64d3946..c9604dd 100644
+--- a/src/composables/useGithubSkillsSync.ts
++++ b/src/composables/useGithubSkillsSync.ts
+@@ -1,4 +1,5 @@
+ import { computed, ref } from 'vue'
++import { appFetch as fetch } from '../api/appUrl'
+ 
+ type ToastType = 'success' | 'error'
+ 
+diff --git a/src/main.ts b/src/main.ts
+index a281ec4..6a3e898 100644
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -4,6 +4,7 @@ import router from './router'
+ import './style.css'
+ import { t } from './composables/useUiLanguage'
+ import { installFeedbackDiagnostics } from './composables/useFeedbackDiagnostics'
++import { appHttpUrl } from './api/appUrl'
+ 
+ console.log('Welcome to codexui. github: https://github.com/friuns2/codexUI')
+ 
+@@ -11,9 +12,13 @@ installFeedbackDiagnostics()
+ 
+ createApp(App).use(router).mount('#app')
+ 
+-if ('serviceWorker' in navigator && import.meta.env.PROD) {
++if (
++  'serviceWorker' in navigator &&
++  import.meta.env.PROD &&
++  import.meta.env.VITE_ENABLE_SERVICE_WORKER === '1'
++) {
+   window.addEventListener('load', () => {
+-    navigator.serviceWorker.register('/sw.js').catch((error) => {
++    navigator.serviceWorker.register(appHttpUrl('sw.js')).catch((error) => {
+       console.error(t('Service worker registration failed.'), error)
+     })
+   })
+diff --git a/src/server/authMiddleware.ts b/src/server/authMiddleware.ts
+index 2bf6adc..85af3f2 100644
+--- a/src/server/authMiddleware.ts
++++ b/src/server/authMiddleware.ts
+@@ -205,7 +205,7 @@ const errEl=document.getElementById('err');
+ form.addEventListener('submit',async e=>{
+   e.preventDefault();
+   errEl.style.display='none';
+-  const res=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('pw').value})});
++  const res=await fetch('auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('pw').value})});
+   if(res.ok){window.location.reload()}else{errEl.style.display='block';document.getElementById('pw').value='';document.getElementById('pw').focus()}
+ });
+ </script>
+diff --git a/src/server/httpServer.ts b/src/server/httpServer.ts
+index 90f2cdb..dc797a0 100644
+--- a/src/server/httpServer.ts
++++ b/src/server/httpServer.ts
+@@ -44,9 +44,9 @@ function renderFrontendMissingHtml(message: string, details?: string[]): string
+     `<h1>${message}</h1>`,
+     lines,
+     '<p>Redirecting to chat in 3 seconds...</p>',
+-    '<p><a href="/">Back to chat</a></p>',
++    '<p><a href="./">Back to chat</a></p>',
+     '<script>',
+-    'setTimeout(() => { window.location.assign("/") }, 3000)',
++    'setTimeout(() => { window.location.assign("./") }, 3000)',
+     '</script>',
+     '</body>',
+     '</html>',
+diff --git a/src/server/localBrowseUi.ts b/src/server/localBrowseUi.ts
+index d584110..6a86416 100644
+--- a/src/server/localBrowseUi.ts
++++ b/src/server/localBrowseUi.ts
+@@ -244,6 +244,7 @@ export async function createDirectoryListingHtml(localPath: string, options?: {
+   const newProjectName = normalizeNewProjectName(options?.newProjectName ?? '')
+   const items = await getDirectoryItems(localPath)
+   const parentPath = dirname(localPath)
++  const browseRoutePathLiteral = escapeForInlineScriptString(toBrowseHref(localPath))
+   const rows = items
+     .map((item) => {
+       const suffix = item.isDirectory ? '/' : ''
+@@ -267,6 +268,7 @@ export async function createDirectoryListingHtml(localPath: string, options?: {
+ <head>
+   <meta charset="utf-8" />
+   <meta name="viewport" content="width=device-width, initial-scale=1" />
++  <link rel="icon" href="data:," />
+   <title>Index of ${escapeHtml(localPath)}</title>
+   <style>
+     body { font-family: ui-monospace, Menlo, Monaco, monospace; margin: 16px; background: #0b1020; color: #dbe6ff; }
+@@ -316,6 +318,15 @@ export async function createDirectoryListingHtml(localPath: string, options?: {
+   <p id="status" class="status"></p>
+   <ul>${rows}</ul>
+   <script>
++    const appRoutePath = ${browseRoutePathLiteral};
++    const appRouteIndex = location.pathname.endsWith(appRoutePath)
++      ? location.pathname.length - appRoutePath.length
++      : -1;
++    const appBasePath = appRouteIndex >= 0 ? location.pathname.slice(0, appRouteIndex + 1) : '/';
++    const appUrl = (path) => appBasePath + path.replace(/^\\/+/, '');
++    document.querySelectorAll('a[href^="/codex-"]').forEach((link) => {
++      link.setAttribute('href', appUrl(link.getAttribute('href') || ''));
++    });
+     const status = document.getElementById('status');
+     document.addEventListener('click', async (event) => {
+       const target = event.target;
+@@ -331,7 +342,7 @@ export async function createDirectoryListingHtml(localPath: string, options?: {
+       button.disabled = true;
+       status.textContent = statusText;
+       try {
+-        const response = await fetch('/codex-api/project-root', {
++        const response = await fetch(appUrl('/codex-api/project-root'), {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+@@ -346,7 +357,7 @@ export async function createDirectoryListingHtml(localPath: string, options?: {
+           return;
+         }
+         status.textContent = 'Folder opened. Returning to Codex...';
+-        const nextUrl = '/?openProjectPath=' + encodeURIComponent(path) + '#/';
++        const nextUrl = appUrl('/?openProjectPath=' + encodeURIComponent(path) + '#/');
+         window.location.assign(nextUrl);
+       } catch {
+         status.textContent = errorText;
+@@ -363,11 +374,13 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
+   const parentPath = dirname(localPath)
+   const language = languageForPath(localPath)
+   const safeContentLiteral = escapeForInlineScriptString(content)
++  const editRoutePathLiteral = escapeForInlineScriptString(toEditHref(localPath))
+   return `<!doctype html>
+ <html lang="en">
+ <head>
+   <meta charset="utf-8" />
+   <meta name="viewport" content="width=device-width, initial-scale=1" />
++  <link rel="icon" href="data:," />
+   <title>Edit ${escapeHtml(localPath)}</title>
+   <style>
+     html, body { width: 100%; height: 100%; margin: 0; }
+@@ -397,6 +410,15 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
+   <div id="editor"></div>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.js"></script>
+   <script>
++    const appRoutePath = ${editRoutePathLiteral};
++    const appRouteIndex = location.pathname.endsWith(appRoutePath)
++      ? location.pathname.length - appRoutePath.length
++      : -1;
++    const appBasePath = appRouteIndex >= 0 ? location.pathname.slice(0, appRouteIndex + 1) : '/';
++    const appUrl = (path) => appBasePath + path.replace(/^\\/+/, '');
++    document.querySelectorAll('a[href^="/codex-"]').forEach((link) => {
++      link.setAttribute('href', appUrl(link.getAttribute('href') || ''));
++    });
+     const saveBtn = document.getElementById('saveBtn');
+     const status = document.getElementById('status');
+     const editor = ace.edit('editor');
+diff --git a/tests/website-docs-misc/index.md b/tests/website-docs-misc/index.md
+index 8d6ac44..3996667 100644
+--- a/tests/website-docs-misc/index.md
++++ b/tests/website-docs-misc/index.md
+@@ -11,3 +11,4 @@ Return to the [manual test index](../../tests.md).
+ | [Feature: GitHub Website Redesign — OpenClaw-Inspired Design + Web Demo Link](github-website-redesign-openclaw-inspired-design-web-demo-link.md) |
+ | [Inline code with asterisks does not leak formatting](inline-code-with-asterisks-does-not-leak-formatting.md) |
+ | [Codex app-server memories default and opt-out](codex-app-server-memories-default-and-opt-out.md) |
++| [JupyterHub subpath proxy routing](jupyterhub-subpath-proxy-routing.md) |
+diff --git a/tests/website-docs-misc/jupyterhub-subpath-proxy-routing.md b/tests/website-docs-misc/jupyterhub-subpath-proxy-routing.md
+new file mode 100644
+index 0000000..a0f7f8b
+--- /dev/null
++++ b/tests/website-docs-misc/jupyterhub-subpath-proxy-routing.md
+@@ -0,0 +1,32 @@
++### JupyterHub subpath proxy routing
++
++#### Feature/Change Name
++Serve Codex Mobile below a JupyterHub `jupyter-server-proxy` path without bypassing JupyterHub authentication or exposing the application port.
++
++#### Prerequisites/Setup
++1. Build the package with `pnpm run build`.
++2. Configure a named `jupyter-server-proxy` route at `/user/<username>/codex/` with `absolute_url: False`.
++3. Start Codex Mobile with `--no-password --no-open --no-tunnel --no-login --host 127.0.0.1`.
++4. Keep service workers disabled by leaving `VITE_ENABLE_SERVICE_WORKER` unset or setting it to `0`.
++
++#### Steps
++1. Sign in to JupyterHub and open `/user/<username>/codex/`.
++2. In browser developer tools, reload the page and inspect document, script, stylesheet, icon, API, SSE, and WebSocket requests.
++3. Create a thread, send a message, reload the page, and reopen the thread.
++4. Open a local image and a filesystem directory from the conversation or project controls.
++5. Open an editable text file, return to the directory listing, and verify that both pages remain below the proxy prefix.
++6. Open the integrated terminal and run a harmless command such as `pwd`.
++7. On the compute node, inspect the listening socket for the Codex Mobile port.
++8. Sign out of JupyterHub or use an unauthenticated browser session and try the proxied URL.
++
++#### Expected Results
++- All application requests remain below `/user/<username>/codex/`; no request is sent to root `/codex-api/*`, `/codex-local-*`, `/assets/*`, or `/icons/*`.
++- RPC and WebSocket or SSE connections succeed through the prefix.
++- Thread creation, messaging, reload, local image/file browsing, editing, and terminal access work.
++- No service worker is registered by default.
++- The Codex Mobile port listens only on `127.0.0.1`, while the proxied URL remains accessible.
++- JupyterHub rejects unauthenticated access before the request reaches Codex Mobile.
++
++#### Rollback/Cleanup
++- Stop the Codex Mobile process and its `jupyter-server-proxy` launcher.
++- Remove the named proxy entry if the deployment is being rolled back.
+diff --git a/vite.config.ts b/vite.config.ts
+index 2e9d72d..2ce9f9b 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -103,6 +103,7 @@ function resolveViteRollbackDebugFallback(): string {
+ const viteRollbackDebugFallback = resolveViteRollbackDebugFallback();
+ 
+ export default defineConfig({
++  base: "./",
+   define: {
+     "import.meta.env.VITE_WORKTREE_NAME": JSON.stringify(worktreeName),
+     "import.meta.env.VITE_APP_VERSION": JSON.stringify(appVersion),
