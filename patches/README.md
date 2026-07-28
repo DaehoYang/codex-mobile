@@ -79,7 +79,42 @@ Keep this tarball with the Docker build context. Do not use
 `npm install -g codexapp` in the runtime image because that downloads the
 unmodified public package.
 
-## Build directly from GitHub in a Dockerfile
+## Fast Docker build from the release package
+
+The recommended Dockerfile downloads the prebuilt package from the
+fork-specific GitHub prerelease. It does not clone the repository, install
+development dependencies, run tests, or rebuild the frontend:
+
+```dockerfile
+FROM <existing-jupyter-gpu-image>
+
+USER root
+
+ARG CODEX_CLI_VERSION=0.144.4
+
+ADD https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-b2417fc/codexapp-0.1.87-jupyterhub-b2417fc.tgz \
+  /tmp/codexapp-patched.tgz
+
+RUN echo "6bc898cc0bf0bb03112c3313cc3b2bdd50403afbe33d3b32d663b4c4ac8eafd1  /tmp/codexapp-patched.tgz" \
+      | sha256sum -c - \
+    && npm install -g \
+      /tmp/codexapp-patched.tgz \
+      "@openai/codex@${CODEX_CLI_VERSION}" \
+    && codexapp --help | grep -q -- "--host <host>" \
+    && codex --version \
+    && rm -f /tmp/codexapp-patched.tgz \
+    && npm cache clean --force
+
+# Restore the normal USER from the original Jupyter image here.
+```
+
+The release is tied to source commit `b2417fc`. Change both the release URL
+and checksum when selecting a newer deployment build.
+
+## Rebuild from source inside Docker
+
+Use this slower alternative when the entire package must be reproduced inside
+the Docker build rather than downloaded as a prebuilt release asset.
 
 Use a multi-stage build so Docker clones, tests, builds, and packs the
 deployment branch. The final image receives only the packed package.
