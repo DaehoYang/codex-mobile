@@ -1,8 +1,8 @@
 # JupyterHub deployment build
 
-This branch contains the reverse-proxy base-path support, loopback-only
-binding option, regression checklist, and a portable patch for Codex Mobile
-`0.1.87`.
+This branch contains reverse-proxy base-path support, loopback-only binding,
+KaTeX equation rendering, regression checklists, and portable patches for
+Codex Mobile `0.1.87`.
 
 ## Clone the ready-to-build branch
 
@@ -31,23 +31,51 @@ pnpm 10.34.5
 Codex CLI 0.144.4
 ```
 
-## Apply the portable patch instead
+## Apply the portable patches instead
 
 `jupyterhub-base-path.patch` is based on upstream commit `fac2291`
-(Codex Mobile `0.1.87`). From a clean checkout at that commit:
+(Codex Mobile `0.1.87`). `katex-equation-rendering.patch` contains only the
+equation-rendering change from source commit `1ab53c4`.
+
+The KaTeX patch has a deliberately narrow scope:
+
+- one runtime dependency in `package.json`;
+- one isolated parser/renderer module and its unit tests;
+- small integration points and styles in `ThreadConversation.vue`; and
+- one manual regression test.
+
+It does not change the server, reverse-proxy handling, authentication, or
+workspace persistence. It was generated with reduced patch context so it can
+be applied either directly to `fac2291` or after
+`jupyterhub-base-path.patch`.
+
+From a clean checkout at `fac2291`, apply the patches needed by the
+deployment. Applying the reverse-proxy patch first is the recommended order:
 
 ```bash
 git apply --check /path/to/jupyterhub-base-path.patch
 git apply /path/to/jupyterhub-base-path.patch
+
+git apply --check /path/to/katex-equation-rendering.patch
+git apply /path/to/katex-equation-rendering.patch
 ```
 
-To try a three-way application after a later upstream update:
+The ready-to-build branch already contains both changes; do not reapply these
+patches after cloning that branch.
+
+After a later upstream update, check each patch separately before modifying
+the worktree. If a normal application no longer succeeds, try a three-way
+application:
 
 ```bash
 git apply --3way /path/to/jupyterhub-base-path.patch
+git apply --3way /path/to/katex-equation-rendering.patch
 ```
 
-Resolve any conflicts and rerun all tests before deployment.
+The most likely equation-patch conflict point is
+`src/components/content/ThreadConversation.vue` if upstream changes its
+message parser or renderer. Resolve any conflicts, reinstall dependencies,
+and rerun all tests before deployment.
 
 ## Build a package for a Docker image
 
@@ -150,6 +178,10 @@ RUN echo "6bc898cc0bf0bb03112c3313cc3b2bdd50403afbe33d3b32d663b4c4ac8eafd1  /tmp
 
 The release is tied to source commit `b2417fc`. Change both the release URL
 and checksum when selecting a newer deployment build.
+
+That release package predates the KaTeX equation-rendering change. Rebuild
+from the current deployment branch, or publish a newer package and update the
+URL and checksum, when equation rendering is required.
 
 ## Rebuild from source inside Docker
 

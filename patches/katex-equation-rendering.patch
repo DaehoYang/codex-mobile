@@ -1,0 +1,444 @@
+From 1ab53c44da5a14cebae5e50684bee4cf4d56dbc7 Mon Sep 17 00:00:00 2001
+From: Daeho Yang <DaehoYang@users.noreply.github.com>
+Date: Tue, 28 Jul 2026 18:09:10 +0900
+Subject: [PATCH] feat: render LaTeX equations with KaTeX
+
+---
+ package.json                                  |   1 +
+ src/components/content/ThreadConversation.vue |  88 +++++++++++-
+ src/components/content/messageMath.test.ts    |  61 +++++++++
+ src/components/content/messageMath.ts         | 126 ++++++++++++++++++
+ tests/chat-composer-rendering/index.md        |   1 +
+ .../latex-equations-render-with-katex.md      |  38 ++++++
+ 6 files changed, 308 insertions(+), 7 deletions(-)
+ create mode 100644 src/components/content/messageMath.test.ts
+ create mode 100644 src/components/content/messageMath.ts
+ create mode 100644 tests/chat-composer-rendering/latex-equations-render-with-katex.md
+
+diff --git a/package.json b/package.json
+index 84ee9d0..753038c 100644
+--- a/package.json
++++ b/package.json
+@@ -69,2 +69,3 @@
+     "highlight.js": "^11.11.1",
++    "katex": "^0.18.1",
+     "qrcode-terminal": "^0.12.0",
+diff --git a/src/components/content/ThreadConversation.vue b/src/components/content/ThreadConversation.vue
+index 65c8244..f00ed74 100644
+--- a/src/components/content/ThreadConversation.vue
++++ b/src/components/content/ThreadConversation.vue
+@@ -357,2 +357,3 @@
+                         <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
++                        <span v-else-if="segment.kind === 'math'" class="message-math message-math-inline" v-html="renderMathToHtml(segment.value, false)" />
+                         <a
+@@ -391,2 +392,3 @@
+                         <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
++                        <span v-else-if="segment.kind === 'math'" class="message-math message-math-inline" v-html="renderMathToHtml(segment.value, false)" />
+                         <a
+@@ -420,2 +422,3 @@
+                         <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
++                        <span v-else-if="segment.kind === 'math'" class="message-math message-math-inline" v-html="renderMathToHtml(segment.value, false)" />
+                         <a
+@@ -457,2 +460,3 @@
+                             <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
++                            <span v-else-if="segment.kind === 'math'" class="message-math message-math-inline" v-html="renderMathToHtml(segment.value, false)" />
+                             <a
+@@ -491,2 +495,7 @@
+                     </ol>
++                    <div
++                      v-else-if="block.kind === 'mathBlock'"
++                      class="message-math message-math-display"
++                      v-html="renderMathToHtml(block.value, true)"
++                    />
+                     <div v-else-if="block.kind === 'table'" class="message-table-wrap">
+@@ -506,2 +515,3 @@
+                                 <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
++                                <span v-else-if="segment.kind === 'math'" class="message-math message-math-inline" v-html="renderMathToHtml(segment.value, false)" />
+                                 <a
+@@ -544,2 +554,3 @@
+                                 <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
++                                <span v-else-if="segment.kind === 'math'" class="message-math message-math-inline" v-html="renderMathToHtml(segment.value, false)" />
+                                 <a
+@@ -920,2 +931,3 @@
+ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
++import 'katex/dist/katex.min.css'
+ import type { UiFileChange, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
+@@ -926,2 +938,8 @@ import { useMobile } from '../../composables/useMobile'
+ import { copyTextToClipboard, copyTextWithSelectionFallback } from '../../utils/clipboard'
++import {
++  isDisplayMathOpeningLine,
++  readDisplayMathBlock,
++  renderMathToHtml,
++  splitInlineMath,
++} from './messageMath'
+ 
+@@ -1361,2 +1379,3 @@ type InlineSegment =
+   | { kind: 'strikethrough'; value: string }
++  | { kind: 'math'; value: string }
+   | { kind: 'code'; value: string }
+@@ -1381,2 +1400,3 @@ type MessageBlock =
+   | { kind: 'table'; headers: string[]; rows: string[][]; alignments: TableAlignment[] }
++  | { kind: 'mathBlock'; value: string }
+   | { kind: 'codeBlock'; language: string; value: string }
+@@ -2584,2 +2604,13 @@ function applyInlineMarkdownMarkers(segments: InlineSegment[]): InlineSegment[]
+ 
++function applyInlineMathSegments(segments: InlineSegment[]): InlineSegment[] {
++  return segments.flatMap((segment) => {
++    if (segment.kind !== 'text') return [segment]
++    return splitInlineMath(segment.value).map((part): InlineSegment => (
++      part.kind === 'math'
++        ? { kind: 'math', value: part.value }
++        : { kind: 'text', value: part.value }
++    ))
++  })
++}
++
+ function splitTextByFileUrls(
+@@ -2693,7 +2724,9 @@ function parseInlineSegmentsUncached(text: string): InlineSegment[] {
+   const linkFirstSegments = splitTextByFileUrls(text, {
+-    applyMarkdownMarkers: !hasInlineCodeMarker,
++    applyMarkdownMarkers: false,
+   })
+-  if (!hasInlineCodeMarker) return linkFirstSegments
++  if (!hasInlineCodeMarker) {
++    return applyInlineMarkdownMarkers(applyInlineMathSegments(linkFirstSegments))
++  }
+   if (!linkFirstSegments.some((segment) => segment.kind === 'text' && segment.value.includes('`'))) {
+-    return applyInlineMarkdownMarkers(linkFirstSegments)
++    return applyInlineMarkdownMarkers(applyInlineMathSegments(linkFirstSegments))
+   }
+@@ -2701,3 +2734,3 @@ function parseInlineSegmentsUncached(text: string): InlineSegment[] {
+   const parseCodeAwareTextSegments = (value: string): InlineSegment[] => {
+-    if (!value.includes('`')) return splitPlainTextByLinks(value)
++    if (!value.includes('`')) return splitPlainTextByLinks(value, { applyMarkdownMarkers: false })
+ 
+@@ -2743,3 +2776,3 @@ function parseInlineSegmentsUncached(text: string): InlineSegment[] {
+       if (cursor > textStart) {
+-        segments.push(...splitPlainTextByLinks(value.slice(textStart, cursor)))
++        segments.push(...splitPlainTextByLinks(value.slice(textStart, cursor), { applyMarkdownMarkers: false }))
+       }
+@@ -2818,3 +2851,3 @@ function parseInlineSegmentsUncached(text: string): InlineSegment[] {
+     if (textStart < value.length) {
+-      segments.push(...splitPlainTextByLinks(value.slice(textStart)))
++      segments.push(...splitPlainTextByLinks(value.slice(textStart), { applyMarkdownMarkers: false }))
+     }
+@@ -2824,3 +2857,3 @@ function parseInlineSegmentsUncached(text: string): InlineSegment[] {
+ 
+-  return linkFirstSegments.flatMap((segment) => (
++  const codeAwareSegments = linkFirstSegments.flatMap((segment) => (
+     segment.kind === 'text'
+@@ -2829,2 +2862,3 @@ function parseInlineSegmentsUncached(text: string): InlineSegment[] {
+   ))
++  return applyInlineMarkdownMarkers(applyInlineMathSegments(codeAwareSegments))
+ }
+@@ -3180,2 +3214,3 @@ function isParagraphBreakingLine(line: string): boolean {
+     readFenceStart(line) !== null ||
++    isDisplayMathOpeningLine(line) ||
+     isThematicBreakLine(line) ||
+@@ -3388,2 +3423,9 @@ function parseTextBlocks(text: string): MessageBlock[] {
+ 
++    const displayMath = readDisplayMathBlock(lines, index)
++    if (displayMath) {
++      blocks.push({ kind: 'mathBlock', value: displayMath.value })
++      index = displayMath.nextIndex
++      continue
++    }
++
+     if (isThematicBreakLine(lines[index])) {
+@@ -3481,2 +3523,3 @@ function parseTextBlocks(text: string): MessageBlock[] {
+         readFenceStart(lines[index]) ||
++        readDisplayMathBlock(lines, index) !== null ||
+         isThematicBreakLine(lines[index]) ||
+@@ -3662,2 +3705,5 @@ function renderInlineSegmentsAsHtml(text: string): string {
+       }
++      if (segment.kind === 'math') {
++        return `<span class="message-math message-math-inline">${renderMathToHtml(segment.value, false)}</span>`
++      }
+       if (segment.kind === 'file') {
+@@ -3740,2 +3786,5 @@ function renderMessageBlockAsHtml(block: MessageBlock): string {
+   }
++  if (block.kind === 'mathBlock') {
++    return `<div class="message-math message-math-display">${renderMathToHtml(block.value, true)}</div>`
++  }
+   if (block.kind === 'codeBlock') {
+@@ -4954,2 +5003,27 @@ onBeforeUnmount(() => {
+ 
++:deep(.message-math-inline) {
++  display: inline-block;
++  max-width: 100%;
++  vertical-align: -0.15em;
++  white-space: normal;
++}
++
++:deep(.message-math-display) {
++  width: 100%;
++  max-width: 100%;
++  overflow-x: auto;
++  overflow-y: hidden;
++  padding: 0.25rem 0;
++}
++
++:deep(.message-math-display .katex-display) {
++  width: max-content;
++  min-width: 100%;
++  margin: 0.25rem 0;
++}
++
++:deep(.message-math .katex-error) {
++  color: #b91c1c;
++}
++
+ .message-heading {
+diff --git a/src/components/content/messageMath.test.ts b/src/components/content/messageMath.test.ts
+new file mode 100644
+index 0000000..baf116a
+--- /dev/null
++++ b/src/components/content/messageMath.test.ts
+@@ -0,0 +1,61 @@
++import { describe, expect, it } from 'vitest'
++import {
++  readDisplayMathBlock,
++  renderMathToHtml,
++  splitInlineMath,
++} from './messageMath'
++
++describe('message math rendering', () => {
++  it('splits standard inline LaTeX delimiters without consuming surrounding text', () => {
++    expect(splitInlineMath('branches \\(+\\phi\\) and \\(-\\phi\\) remain')).toEqual([
++      { kind: 'text', value: 'branches ' },
++      { kind: 'math', value: '+\\phi' },
++      { kind: 'text', value: ' and ' },
++      { kind: 'math', value: '-\\phi' },
++      { kind: 'text', value: ' remain' },
++    ])
++  })
++
++  it('keeps unmatched delimiters as plain text', () => {
++    expect(splitInlineMath('unfinished \\(x + y')).toEqual([
++      { kind: 'text', value: 'unfinished \\(x + y' },
++    ])
++  })
++
++  it('reads bracketed and double-dollar display equations', () => {
++    expect(readDisplayMathBlock([
++      '\\[',
++      'U_R=P_{2d}M_{+\\phi_2}P_{12}M_{+\\phi_1}U,',
++      '\\qquad',
++      'U_L=P_{2d}M_{-\\phi_2}P_{12}M_{-\\phi_1}U',
++      '\\]',
++      'after',
++    ], 0)).toEqual({
++      value: 'U_R=P_{2d}M_{+\\phi_2}P_{12}M_{+\\phi_1}U,\n\\qquad\nU_L=P_{2d}M_{-\\phi_2}P_{12}M_{-\\phi_1}U',
++      nextIndex: 5,
++    })
++    expect(readDisplayMathBlock(['$$E=mc^2$$'], 0)).toEqual({
++      value: 'E=mc^2',
++      nextIndex: 1,
++    })
++  })
++
++  it('leaves an unterminated display equation to the Markdown fallback', () => {
++    expect(readDisplayMathBlock(['\\[', 'x+y'], 0)).toBeNull()
++  })
++
++  it('renders inline and display equations with accessible MathML', () => {
++    const inline = renderMathToHtml('U_R=P_{2d}M_{+\\phi_2}U', false)
++    const display = renderMathToHtml('U_L=P_{2d}M_{-\\phi_2}U', true)
++
++    expect(inline).toContain('class="katex"')
++    expect(inline).toContain('<math')
++    expect(display).toContain('class="katex-display"')
++    expect(display).toContain('<math')
++  })
++
++  it('does not trust dangerous LaTeX URLs', () => {
++    const html = renderMathToHtml('\\href{javascript:alert(1)}{unsafe}', false)
++    expect(html).not.toContain('href="javascript:')
++  })
++})
+diff --git a/src/components/content/messageMath.ts b/src/components/content/messageMath.ts
+new file mode 100644
+index 0000000..7fa01e7
+--- /dev/null
++++ b/src/components/content/messageMath.ts
+@@ -0,0 +1,126 @@
++import katex from 'katex'
++
++export type InlineMathPart =
++  | { kind: 'text'; value: string }
++  | { kind: 'math'; value: string }
++
++export type DisplayMathBlock = {
++  value: string
++  nextIndex: number
++}
++
++const MATH_HTML_CACHE_LIMIT = 500
++const mathHtmlCache = new Map<string, string>()
++
++function isEscaped(value: string, index: number): boolean {
++  let backslashCount = 0
++  for (let cursor = index - 1; cursor >= 0 && value[cursor] === '\\'; cursor -= 1) {
++    backslashCount += 1
++  }
++  return backslashCount % 2 === 1
++}
++
++function findUnescapedDelimiter(value: string, delimiter: string, fromIndex: number): number {
++  let index = value.indexOf(delimiter, fromIndex)
++  while (index >= 0) {
++    if (!isEscaped(value, index)) return index
++    index = value.indexOf(delimiter, index + delimiter.length)
++  }
++  return -1
++}
++
++export function splitInlineMath(value: string): InlineMathPart[] {
++  if (!value.includes('\\(')) return [{ kind: 'text', value }]
++
++  const parts: InlineMathPart[] = []
++  let cursor = 0
++
++  while (cursor < value.length) {
++    const openIndex = findUnescapedDelimiter(value, '\\(', cursor)
++    if (openIndex < 0) break
++
++    const closeIndex = findUnescapedDelimiter(value, '\\)', openIndex + 2)
++    if (closeIndex < 0) break
++
++    if (openIndex > cursor) {
++      parts.push({ kind: 'text', value: value.slice(cursor, openIndex) })
++    }
++
++    const expression = value.slice(openIndex + 2, closeIndex).trim()
++    if (expression) {
++      parts.push({ kind: 'math', value: expression })
++    } else {
++      parts.push({ kind: 'text', value: value.slice(openIndex, closeIndex + 2) })
++    }
++    cursor = closeIndex + 2
++  }
++
++  if (cursor < value.length) {
++    parts.push({ kind: 'text', value: value.slice(cursor) })
++  }
++
++  return parts.length > 0 ? parts : [{ kind: 'text', value }]
++}
++
++export function isDisplayMathOpeningLine(line: string): boolean {
++  const trimmed = line.trim()
++  return trimmed.startsWith('\\[') || trimmed.startsWith('$$')
++}
++
++export function readDisplayMathBlock(lines: string[], startIndex: number): DisplayMathBlock | null {
++  const firstLine = lines[startIndex]?.trim() ?? ''
++  const delimiter = firstLine.startsWith('\\[')
++    ? { open: '\\[', close: '\\]' }
++    : firstLine.startsWith('$$')
++      ? { open: '$$', close: '$$' }
++      : null
++  if (!delimiter) return null
++
++  const expressionLines: string[] = []
++  let index = startIndex
++  let current = firstLine.slice(delimiter.open.length)
++
++  while (index < lines.length) {
++    const closeIndex = current.lastIndexOf(delimiter.close)
++    if (closeIndex >= 0) {
++      const afterClose = current.slice(closeIndex + delimiter.close.length).trim()
++      if (afterClose) return null
++      expressionLines.push(current.slice(0, closeIndex))
++      const value = expressionLines.join('\n').trim()
++      return value ? { value, nextIndex: index + 1 } : null
++    }
++
++    expressionLines.push(current)
++    index += 1
++    if (index >= lines.length) break
++    current = lines[index]
++  }
++
++  return null
++}
++
++export function renderMathToHtml(value: string, displayMode: boolean): string {
++  const cacheKey = `${displayMode ? 'display' : 'inline'}\u0000${value}`
++  const cached = mathHtmlCache.get(cacheKey)
++  if (cached !== undefined) {
++    mathHtmlCache.delete(cacheKey)
++    mathHtmlCache.set(cacheKey, cached)
++    return cached
++  }
++
++  const html = katex.renderToString(value, {
++    displayMode,
++    throwOnError: false,
++    strict: 'warn',
++    trust: false,
++    output: 'htmlAndMathml',
++  })
++
++  mathHtmlCache.set(cacheKey, html)
++  while (mathHtmlCache.size > MATH_HTML_CACHE_LIMIT) {
++    const oldestKey = mathHtmlCache.keys().next().value as string | undefined
++    if (oldestKey === undefined) break
++    mathHtmlCache.delete(oldestKey)
++  }
++  return html
++}
+diff --git a/tests/chat-composer-rendering/index.md b/tests/chat-composer-rendering/index.md
+index b41a2dd..428d462 100644
+--- a/tests/chat-composer-rendering/index.md
++++ b/tests/chat-composer-rendering/index.md
+@@ -11,2 +11,3 @@ Return to the [manual test index](../../tests.md).
+ | [Codex thread deep links render as local web thread URLs](codex-thread-deep-links-render-as-local-web-thread-urls.md) |
++| [LaTeX equations render with KaTeX](latex-equations-render-with-katex.md) |
+ | [Bold-wrapped Markdown links render without literal markers](bold-wrapped-markdown-links-render-without-literal-markers.md) |
+diff --git a/tests/chat-composer-rendering/latex-equations-render-with-katex.md b/tests/chat-composer-rendering/latex-equations-render-with-katex.md
+new file mode 100644
+index 0000000..8d3a07c
+--- /dev/null
++++ b/tests/chat-composer-rendering/latex-equations-render-with-katex.md
+@@ -0,0 +1,38 @@
++### LaTeX equations render with KaTeX
++
++#### Feature/Change Name
++KaTeX rendering for standard inline and display LaTeX delimiters in chat and
++plan Markdown.
++
++#### Prerequisites/Setup
++1. Build or run Codex Mobile with its dependencies installed.
++2. Open a thread in which Markdown messages are visible.
++3. Make light and dark themes available.
++
++#### Steps
++1. Send or inspect a message containing inline equations such as
++   `\(M_{+\phi}\)` and `\(M_{-\phi}\)`.
++2. Include a display equation delimited by `\[` and `\]`, with the opening and
++   closing delimiters on separate lines.
++3. Repeat the display equation with `$$` delimiters.
++4. Include the same delimiters inside a backticked inline-code span and a
++   fenced code block.
++5. Include a malformed or unterminated equation.
++6. Check the rendered message in light and dark themes and at a narrow mobile
++   viewport.
++
++#### Expected Results
++- Inline equations render as inline KaTeX without breaking surrounding text.
++- Display equations render as centered blocks with horizontal scrolling when
++  they exceed the message width.
++- KaTeX output includes MathML for accessible equation text.
++- Delimiters inside inline or fenced code remain literal code.
++- Malformed equations remain visible through the KaTeX error fallback; they
++  do not crash or remove the rest of the message.
++- Equation text and error fallback remain readable in light and dark themes.
++
++#### Rollback/Cleanup
++- Revert the KaTeX dependency and the message math parser/renderer integration
++  if equations must return to literal Markdown text.
++
++---
+-- 
+2.34.1
