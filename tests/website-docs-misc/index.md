@@ -12,3 +12,4 @@ Return to the [manual test index](../../tests.md).
 | [Inline code with asterisks does not leak formatting](inline-code-with-asterisks-does-not-leak-formatting.md) |
 | [Codex app-server memories default and opt-out](codex-app-server-memories-default-and-opt-out.md) |
 | [JupyterHub subpath proxy routing](jupyterhub-subpath-proxy-routing.md) |
+| [Markdown file preview with KaTeX](markdown-file-preview-with-katex.md) |

@@ -68,6 +68,7 @@
     "firebase": "^12.2.1",
     "highlight.js": "^11.11.1",
     "katex": "^0.18.1",
+    "markdown-it": "^14.3.0",
     "qrcode-terminal": "^0.12.0",
     "ws": "^8.18.3"
   },
@@ -78,6 +79,7 @@
     "@playwright/test": "^1.59.1",
     "@tailwindcss/vite": "^4.1.18",
     "@types/express": "^5.0.0",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.13.2",
     "@types/qrcode-terminal": "^0.12.2",
     "@types/ws": "^8.18.1",

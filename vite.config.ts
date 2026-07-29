@@ -1,7 +1,8 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { createCodexBridgeMiddleware } from "./src/server/codexAppServerBridge";
-import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, getLocalDirectoryListing, isTextEditableFile, normalizeLocalPath } from "./src/server/localBrowseUi";
+import { createDirectoryListingHtml, createMarkdownPreviewHtml, createTextEditorHtml, decodeBrowsePath, getLocalDirectoryListing, isTextEditableFile, normalizeLocalPath } from "./src/server/localBrowseUi";
+import { canRenderMarkdownPreview } from "./src/server/localMarkdownRenderer";
 import tailwindcss from "@tailwindcss/vite";
 import { spawnSync } from "node:child_process";
 import { createReadStream, existsSync, readFileSync } from "node:fs";
@@ -287,6 +288,14 @@ export default defineConfig({
             res.setHeader("Cache-Control", "private, no-store");
             if (fileStat.isDirectory()) {
               const html = await createDirectoryListingHtml(localPath, { newProjectName });
+              res.statusCode = 200;
+              res.setHeader("Content-Type", "text/html; charset=utf-8");
+              res.end(html);
+              return;
+            }
+
+            if (fileStat.isFile() && canRenderMarkdownPreview(localPath, fileStat.size)) {
+              const html = await createMarkdownPreviewHtml(localPath);
               res.statusCode = 200;
               res.setHeader("Content-Type", "text/html; charset=utf-8");
               res.end(html);

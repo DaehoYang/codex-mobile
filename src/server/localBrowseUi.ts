@@ -1,5 +1,6 @@
-import { dirname, extname, join } from 'node:path'
+import { basename, dirname, extname, join } from 'node:path'
 import { open, readFile, readdir, stat } from 'node:fs/promises'
+import { renderLocalMarkdown } from './localMarkdownRenderer.js'
 
 type DirectoryItem = {
   name: string
@@ -443,6 +444,100 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
         body: editor.getValue(),
       });
       status.textContent = response.ok ? 'Saved' : 'Save failed';
+    });
+  </script>
+</body>
+</html>`
+}
+
+export async function createMarkdownPreviewHtml(localPath: string): Promise<string> {
+  const content = await readFile(localPath, 'utf8')
+  const parentPath = dirname(localPath)
+  const rendered = renderLocalMarkdown(content)
+  const browseRoutePathLiteral = escapeForInlineScriptString(toBrowseHref(localPath))
+  const rawHref = `/codex-local-file?path=${encodeURIComponent(localPath)}`
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
+  <title>${escapeHtml(basename(localPath))}</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --page: #f8fafc;
+      --surface: #ffffff;
+      --text: #172033;
+      --muted: #64748b;
+      --border: #dbe3ef;
+      --link: #1d4ed8;
+      --code: #eef2f7;
+      --quote: #e2e8f0;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page: #08111f;
+        --surface: #0f1b2d;
+        --text: #e5edf8;
+        --muted: #9fb0c6;
+        --border: #293b55;
+        --link: #8cc2ff;
+        --code: #15243a;
+        --quote: #31445f;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--page); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(12px); }
+    .toolbar a { display: inline-flex; min-height: 36px; align-items: center; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); text-decoration: none; }
+    .toolbar a:hover { border-color: var(--link); color: var(--link); }
+    .path { min-width: 0; margin-left: 4px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .markdown-body { width: min(100% - 28px, 980px); margin: 0 auto; padding: 32px 0 72px; font-size: 16px; line-height: 1.72; overflow-wrap: anywhere; }
+    .markdown-body > :first-child { margin-top: 0; }
+    .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 { margin: 1.6em 0 0.65em; line-height: 1.28; }
+    .markdown-body h1, .markdown-body h2 { padding-bottom: 0.3em; border-bottom: 1px solid var(--border); }
+    .markdown-body p, .markdown-body ul, .markdown-body ol, .markdown-body blockquote, .markdown-body table, .markdown-body pre { margin: 0 0 1em; }
+    .markdown-body a { color: var(--link); }
+    .markdown-body img { display: block; max-width: 100%; height: auto; margin: 1rem auto; border-radius: 8px; }
+    .markdown-body blockquote { margin-left: 0; padding: 0.25em 1em; border-left: 4px solid var(--quote); color: var(--muted); }
+    .markdown-body code { padding: 0.15em 0.35em; border-radius: 5px; background: var(--code); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.9em; }
+    .markdown-body pre { padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--code); overflow: auto; }
+    .markdown-body pre code { padding: 0; background: transparent; }
+    .markdown-body table { display: block; width: max-content; max-width: 100%; border-collapse: collapse; overflow-x: auto; }
+    .markdown-body th, .markdown-body td { padding: 7px 10px; border: 1px solid var(--border); text-align: left; }
+    .markdown-body hr { margin: 2em 0; border: 0; border-top: 1px solid var(--border); }
+    .math-inline { display: inline-block; max-width: 100%; vertical-align: -0.15em; }
+    .math-display { width: 100%; max-width: 100%; margin: 1rem 0; padding: 0.35rem 0; overflow-x: auto; text-align: center; }
+    .math-display math { min-width: max-content; }
+    @media (max-width: 640px) {
+      .toolbar { padding: 8px 10px; }
+      .path { display: none; }
+      .markdown-body { width: min(100% - 24px, 980px); padding-top: 24px; font-size: 15px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="toolbar" aria-label="Markdown file actions">
+    <a href="${escapeHtml(toBrowseHref(parentPath))}">Back</a>
+    <a href="${escapeHtml(toEditHref(localPath))}">Edit</a>
+    <a href="${escapeHtml(rawHref)}">Raw</a>
+    <span class="path" title="${escapeHtml(localPath)}">${escapeHtml(localPath)}</span>
+  </nav>
+  <main class="markdown-body">${rendered}</main>
+  <script>
+    const appRoutePath = ${browseRoutePathLiteral};
+    const appRouteIndex = location.pathname.endsWith(appRoutePath)
+      ? location.pathname.length - appRoutePath.length
+      : -1;
+    const appBasePath = appRouteIndex >= 0 ? location.pathname.slice(0, appRouteIndex + 1) : '/';
+    const appUrl = (path) => appBasePath + path.replace(/^\\/+/, '');
+    document.querySelectorAll('a[href^="/codex-"]').forEach((link) => {
+      link.setAttribute('href', appUrl(link.getAttribute('href') || ''));
+    });
+    document.querySelectorAll('img[src^="/codex-"]').forEach((image) => {
+      image.setAttribute('src', appUrl(image.getAttribute('src') || ''));
     });
   </script>
 </body>
