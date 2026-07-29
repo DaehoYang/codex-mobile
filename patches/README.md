@@ -1,8 +1,8 @@
 # JupyterHub deployment build
 
 This branch contains reverse-proxy base-path support, loopback-only binding,
-KaTeX equation rendering, regression checklists, and portable patches for
-Codex Mobile `0.1.87`.
+KaTeX equation rendering in conversations and local Markdown previews,
+regression checklists, and portable patches for Codex Mobile `0.1.87`.
 
 ## Clone the ready-to-build branch
 
@@ -35,7 +35,9 @@ Codex CLI 0.144.4
 
 `jupyterhub-base-path.patch` is based on upstream commit `fac2291`
 (Codex Mobile `0.1.87`). `katex-equation-rendering.patch` contains only the
-equation-rendering change from source commit `1ab53c4`.
+conversation equation-rendering change from source commit `1ab53c4`.
+`markdown-file-preview.patch` contains the local Markdown preview change from
+source commit `93f6622`.
 
 The KaTeX patch has a deliberately narrow scope:
 
@@ -49,6 +51,20 @@ workspace persistence. It was generated with reduced patch context so it can
 be applied either directly to `fac2291` or after
 `jupyterhub-base-path.patch`.
 
+The Markdown preview patch:
+
+- renders `.md`, `.markdown`, `.mdown`, and `.mkd` files opened through
+  `codex-local-browse`;
+- supports `$...$`, `$$...$$`, `\(...\)`, and `\[...\]` equations;
+- escapes raw HTML and renders equations as self-contained MathML;
+- keeps local links, images, and toolbar actions below the active proxy
+  prefix; and
+- falls back to the existing raw response for files larger than 2 MiB.
+
+It depends on the KaTeX patch and is intended to be applied after both earlier
+patches. It also uses reduced patch context to limit conflicts with later
+upstream changes.
+
 From a clean checkout at `fac2291`, apply the patches needed by the
 deployment. Applying the reverse-proxy patch first is the recommended order:
 
@@ -58,10 +74,13 @@ git apply /path/to/jupyterhub-base-path.patch
 
 git apply --check /path/to/katex-equation-rendering.patch
 git apply /path/to/katex-equation-rendering.patch
+
+git apply --check /path/to/markdown-file-preview.patch
+git apply /path/to/markdown-file-preview.patch
 ```
 
-The ready-to-build branch already contains both changes; do not reapply these
-patches after cloning that branch.
+The ready-to-build branch already contains all three changes; do not reapply
+these patches after cloning that branch.
 
 After a later upstream update, check each patch separately before modifying
 the worktree. If a normal application no longer succeeds, try a three-way
@@ -70,12 +89,15 @@ application:
 ```bash
 git apply --3way /path/to/jupyterhub-base-path.patch
 git apply --3way /path/to/katex-equation-rendering.patch
+git apply --3way /path/to/markdown-file-preview.patch
 ```
 
 The most likely equation-patch conflict point is
 `src/components/content/ThreadConversation.vue` if upstream changes its
-message parser or renderer. Resolve any conflicts, reinstall dependencies,
-and rerun all tests before deployment.
+message parser or renderer. The most likely Markdown-preview conflict points
+are `src/server/httpServer.ts`, `src/server/localBrowseUi.ts`, and
+`vite.config.ts` if upstream changes local-file routing. Resolve any conflicts,
+reinstall dependencies, and rerun all tests before deployment.
 
 ## Build a package for a Docker image
 
@@ -182,6 +204,10 @@ and checksum when selecting a newer deployment build.
 This package includes the KaTeX equation-rendering change. The launcher wheel
 is unchanged from the earlier deployment build, but is duplicated in this
 release so both Docker downloads use one release tag.
+
+This existing release predates the local Markdown preview change. Build and
+publish a newer package before expecting Markdown links to render in a
+deployed container.
 
 ## Rebuild from source inside Docker
 
