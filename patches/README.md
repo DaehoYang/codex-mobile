@@ -2,7 +2,8 @@
 
 This branch contains reverse-proxy base-path support, loopback-only binding,
 KaTeX equation rendering in conversations and local Markdown previews,
-regression checklists, and portable patches for Codex Mobile `0.1.87`.
+persisted Goal controls, angle-bracket Markdown image support, regression
+checklists, and portable patches for Codex Mobile `0.1.87`.
 
 ## Clone the ready-to-build branch
 
@@ -79,9 +80,8 @@ The goal-mode patch:
 - keeps ordinary chat usable with older Codex CLIs that do not expose goals.
 
 It was validated with Codex CLI `0.144.4` and is intended to be applied after
-the other three patches. The `feat/goal-mode` branch contains the integrated
-source; `personal/jupyterhub-deployment` still contains the first three
-patches until this feature is promoted.
+the other three patches. The ready-to-build
+`personal/jupyterhub-deployment` branch contains the integrated source.
 
 The angle-bracket image patch accepts standard image destinations such as
 `![Preview](</absolute/path/with space/image.png>)`. It only removes a matched
@@ -190,10 +190,10 @@ For a fast Docker build, download the published launcher wheel after
 `jupyter-server-proxy` and the patched `codexapp` package are installed:
 
 ```dockerfile
-ADD https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-3fd3e8f/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl \
+ADD https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-goal-image/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl \
   /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl
 
-RUN echo "97c2f457fc9f2671532de8e5094cf0605a4f53027bd260912143c0ad8a904543  /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl" \
+RUN echo "ad04008839523fd333131de36de890d38fa367b7dd4bd477199e6c726869086e  /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl" \
       | sha256sum -c - \
     && pip install --no-cache-dir \
       /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl \
@@ -220,10 +220,10 @@ USER root
 
 ARG CODEX_CLI_VERSION=0.144.4
 
-ADD https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-3fd3e8f/codexapp-0.1.87-jupyterhub-3fd3e8f.tgz \
+ADD https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-goal-image/codexapp-0.1.87-jupyterhub-goal-image.tgz \
   /tmp/codexapp-patched.tgz
 
-RUN echo "893ef3463245ed7e0ca32a9888b6e41884445de8e57295525b5d300c49e74350  /tmp/codexapp-patched.tgz" \
+RUN echo "10381a9574b37a60db24410fd572390088f98a444313ab6c8f732fbe70fe58c3  /tmp/codexapp-patched.tgz" \
       | sha256sum -c - \
     && npm install -g \
       /tmp/codexapp-patched.tgz \
@@ -236,13 +236,15 @@ RUN echo "893ef3463245ed7e0ca32a9888b6e41884445de8e57295525b5d300c49e74350  /tmp
 # Restore the normal USER from the original Jupyter image here.
 ```
 
-The release is tied to source commit `3fd3e8f`. Change both the release URL
-and checksum when selecting a newer deployment build.
+The release includes the Goal implementation from source commit `5de721e` and
+the angle-bracket image fix from `14727a3`. Change both the release URL and
+checksum when selecting a newer deployment build.
 
 This package includes KaTeX equation rendering in conversations and local
-Markdown previews. The launcher wheel is unchanged in behavior from the
-earlier deployment build, but is duplicated in this release so both Docker
-downloads use one release tag.
+Markdown previews, persisted Goal controls, and angle-bracket Markdown image
+support. The launcher wheel is unchanged in behavior from the earlier
+deployment build, but is duplicated in this release so both Docker downloads
+use one release tag.
 
 ## Rebuild from source inside Docker
 
