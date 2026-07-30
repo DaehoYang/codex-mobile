@@ -39,6 +39,8 @@ conversation equation-rendering change from source commit `1ab53c4`.
 `markdown-file-preview.patch` contains the local Markdown preview change from
 source commit `93f6622`. `thread-goal-mode.patch` contains the goal API,
 state, command, and GUI change from source commit `5de721e`.
+`angle-bracket-markdown-images.patch` contains the chat image compatibility
+fix from source commit `14727a3`.
 
 The KaTeX patch has a deliberately narrow scope:
 
@@ -81,6 +83,13 @@ the other three patches. The `feat/goal-mode` branch contains the integrated
 source; `personal/jupyterhub-deployment` still contains the first three
 patches until this feature is promoted.
 
+The angle-bracket image patch accepts standard image destinations such as
+`![Preview](</absolute/path/with space/image.png>)`. It only removes a matched
+outer `<...>` pair before the existing local-image or HTTPS URL conversion.
+It does not change equation parsing, ordinary links, or local-file serving.
+Apply it after the KaTeX equation patch; applying it last is the simplest
+deployment order.
+
 From a clean checkout at `fac2291`, apply the patches needed by the
 deployment. Applying the reverse-proxy patch first is the recommended order:
 
@@ -96,6 +105,9 @@ git apply /path/to/markdown-file-preview.patch
 
 git apply --check /path/to/thread-goal-mode.patch
 git apply /path/to/thread-goal-mode.patch
+
+git apply --check /path/to/angle-bracket-markdown-images.patch
+git apply /path/to/angle-bracket-markdown-images.patch
 ```
 
 Do not reapply a patch when the checked-out branch already contains its source
@@ -110,6 +122,7 @@ git apply --3way /path/to/jupyterhub-base-path.patch
 git apply --3way /path/to/katex-equation-rendering.patch
 git apply --3way /path/to/markdown-file-preview.patch
 git apply --3way /path/to/thread-goal-mode.patch
+git apply --3way /path/to/angle-bracket-markdown-images.patch
 ```
 
 The most likely equation-patch conflict point is
@@ -119,7 +132,9 @@ are `src/server/httpServer.ts`, `src/server/localBrowseUi.ts`, and
 `vite.config.ts` if upstream changes local-file routing. The most likely
 goal-patch conflict points are `src/App.vue`,
 `src/components/content/ThreadComposer.vue`, and
-`src/composables/useDesktopState.ts`. Resolve any conflicts, reinstall
+`src/composables/useDesktopState.ts`. The angle-bracket image patch can
+conflict in `src/components/content/ThreadConversation.vue` if upstream
+replaces its Markdown image parser. Resolve any conflicts, reinstall
 dependencies, and rerun all tests before deployment.
 
 ## Build a package for a Docker image

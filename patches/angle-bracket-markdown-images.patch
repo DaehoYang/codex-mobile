@@ -1,0 +1,129 @@
+From 14727a3881be962d440bc8198fbf582004a5112d Mon Sep 17 00:00:00 2001
+From: Daeho Yang <sheepvs5@gachon.ac.kr>
+Date: Thu, 30 Jul 2026 22:47:15 +0900
+Subject: [PATCH] fix: render angle-wrapped Markdown images
+
+---
+ src/components/content/ThreadConversation.vue |  3 +-
+ src/components/content/messageImage.test.ts   | 22 ++++++++++++
+ src/components/content/messageImage.ts        |  7 ++++
+ .../angle-bracket-markdown-images-render.md   | 36 +++++++++++++++++++
+ tests/chat-composer-rendering/index.md        |  1 +
+ 5 files changed, 68 insertions(+), 1 deletion(-)
+ create mode 100644 src/components/content/messageImage.test.ts
+ create mode 100644 src/components/content/messageImage.ts
+ create mode 100644 tests/chat-composer-rendering/angle-bracket-markdown-images-render.md
+
+diff --git a/src/components/content/ThreadConversation.vue b/src/components/content/ThreadConversation.vue
+index f00ed74..4472a5f 100644
+--- a/src/components/content/ThreadConversation.vue
++++ b/src/components/content/ThreadConversation.vue
+@@ -943,4 +943,5 @@ import {
+   splitInlineMath,
+ } from './messageMath'
++import { normalizeMarkdownImageDestination } from './messageImage'
+ 
+ import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
+@@ -3559,5 +3560,5 @@ function parseNonCodeMessageBlocks(text: string): MessageBlock[] {
+     const start = match.index
+     const end = start + fullMatch.length
+-    const imageUrl = toRenderableImageUrl(urlRaw.trim())
++    const imageUrl = toRenderableImageUrl(normalizeMarkdownImageDestination(urlRaw))
+     if (!imageUrl) continue
+ 
+diff --git a/src/components/content/messageImage.test.ts b/src/components/content/messageImage.test.ts
+new file mode 100644
+index 0000000..adb687c
+--- /dev/null
++++ b/src/components/content/messageImage.test.ts
+@@ -0,0 +1,22 @@
++import { describe, expect, it } from 'vitest'
++import { normalizeMarkdownImageDestination } from './messageImage'
++
++describe('normalizeMarkdownImageDestination', () => {
++  it('unwraps a CommonMark angle-bracket destination', () => {
++    expect(normalizeMarkdownImageDestination(' </tmp/goal screenshot.png> ')).toBe(
++      '/tmp/goal screenshot.png',
++    )
++    expect(normalizeMarkdownImageDestination('<https://example.com/goal image.png>')).toBe(
++      'https://example.com/goal image.png',
++    )
++  })
++
++  it('preserves ordinary and malformed destinations', () => {
++    expect(normalizeMarkdownImageDestination('/tmp/goal.png')).toBe('/tmp/goal.png')
++    expect(normalizeMarkdownImageDestination('https://example.com/goal.png')).toBe(
++      'https://example.com/goal.png',
++    )
++    expect(normalizeMarkdownImageDestination('</tmp/goal.png')).toBe('</tmp/goal.png')
++    expect(normalizeMarkdownImageDestination('/tmp/goal.png>')).toBe('/tmp/goal.png>')
++  })
++})
+diff --git a/src/components/content/messageImage.ts b/src/components/content/messageImage.ts
+new file mode 100644
+index 0000000..6057677
+--- /dev/null
++++ b/src/components/content/messageImage.ts
+@@ -0,0 +1,7 @@
++export function normalizeMarkdownImageDestination(value: string): string {
++  const trimmed = value.trim()
++  if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
++    return trimmed.slice(1, -1).trim()
++  }
++  return trimmed
++}
+diff --git a/tests/chat-composer-rendering/angle-bracket-markdown-images-render.md b/tests/chat-composer-rendering/angle-bracket-markdown-images-render.md
+new file mode 100644
+index 0000000..066ad01
+--- /dev/null
++++ b/tests/chat-composer-rendering/angle-bracket-markdown-images-render.md
+@@ -0,0 +1,36 @@
++### Angle-bracket Markdown images render
++
++#### Feature/Change Name
++Render CommonMark image destinations wrapped in angle brackets, including
++absolute local paths with spaces.
++
++#### Prerequisites/Setup
++1. Build and start Codex Mobile.
++2. Create or identify a readable local PNG image whose absolute path contains
++   a space.
++3. Open a test thread in light or dark mode.
++
++#### Steps
++1. Render an assistant message containing
++   `![Local preview](</absolute/path/with space/preview.png>)`.
++2. Render the same image without destination wrappers:
++   `![Local preview](/absolute/path/with space/preview.png)`.
++3. Render an HTTPS image with an angle-wrapped destination.
++4. Put an identical image token inside a fenced code block.
++5. Select each rendered image to open the existing image preview modal.
++6. Repeat below a configured reverse-proxy base path.
++
++#### Expected Results
++- Both wrapped and unwrapped local destinations render the image rather than
++  their literal Markdown source.
++- The local image request uses the authenticated `codex-local-image` route
++  below the active reverse-proxy prefix.
++- The HTTPS destination remains an HTTPS image URL.
++- Markdown inside a fenced code block remains literal.
++- Selecting an image opens the existing preview modal.
++- Existing equation rendering and ordinary Markdown links are unchanged.
++
++#### Rollback/Cleanup
++- Remove any temporary image created for the test.
++- Revert the image-destination normalizer and its integration to restore the
++  previous parsing behavior.
+diff --git a/tests/chat-composer-rendering/index.md b/tests/chat-composer-rendering/index.md
+index 428d462..414be42 100644
+--- a/tests/chat-composer-rendering/index.md
++++ b/tests/chat-composer-rendering/index.md
+@@ -32,4 +32,5 @@ Return to the [manual test index](../../tests.md).
+ | [Feature: Lazy message rendering (windowed conversation)](lazy-message-rendering-windowed-conversation.md) |
+ | [Assistant generated image rendering](assistant-generated-image-rendering.md) |
++| [Angle-bracket Markdown images render](angle-bracket-markdown-images-render.md) |
+ | [Stop button activates promptly for new threads](stop-button-activates-promptly-for-new-threads.md) |
+ | [New-thread plan mode persists and toggles correctly](new-thread-plan-mode-persists-and-toggles-correctly.md) |
+-- 
+2.34.1
+
