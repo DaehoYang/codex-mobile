@@ -14,6 +14,7 @@ import type { WorkspaceRootsState } from '../api/codexGateway'
 const gatewayMocks = vi.hoisted(() => ({
   archiveThread: vi.fn(),
   forkThread: vi.fn(),
+  clearThreadGoal: vi.fn(),
   getAccountRateLimits: vi.fn(),
   getAvailableCollaborationModes: vi.fn(),
   getAvailableModelIds: vi.fn(),
@@ -21,6 +22,7 @@ const gatewayMocks = vi.hoisted(() => ({
   getPendingServerRequests: vi.fn(),
   getSkillsList: vi.fn(),
   getThreadDetail: vi.fn(),
+  getThreadGoal: vi.fn(),
   getThreadGroupsPage: vi.fn(),
   getThreadQueueState: vi.fn(),
   getThreadTitleCache: vi.fn(),
@@ -39,6 +41,7 @@ const gatewayMocks = vi.hoisted(() => ({
   startThread: vi.fn(),
   startThreadTurn: vi.fn(),
   subscribeCodexNotifications: vi.fn(),
+  updateThreadGoal: vi.fn(),
 }))
 
 vi.mock('../api/codexGateway', () => ({
@@ -81,6 +84,18 @@ function installTestWindow(initialStorage: Record<string, string> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  gatewayMocks.getThreadGoal.mockResolvedValue(null)
+  gatewayMocks.clearThreadGoal.mockResolvedValue(true)
+  gatewayMocks.updateThreadGoal.mockImplementation(async (threadId, update) => ({
+    threadId,
+    objective: update.objective ?? 'Existing objective',
+    status: update.status ?? 'active',
+    tokenBudget: update.tokenBudget ?? null,
+    tokensUsed: 0,
+    timeUsedSeconds: 0,
+    createdAt: 1,
+    updatedAt: 2,
+  }))
   gatewayMocks.getThreadQueueState.mockResolvedValue({})
   gatewayMocks.getThreadTitleCache.mockResolvedValue({ titles: {} })
   gatewayMocks.getWorkspaceRootsState.mockRejectedValue(new Error('no workspace roots state'))
@@ -464,6 +479,118 @@ describe('Codex CLI availability', () => {
     expect(state.codexCliMissingError.value).toBe('')
   })
 
+})
+
+describe('thread goals', () => {
+  const activeGoal = {
+    threadId: 'goal-thread',
+    objective: 'Ship goal mode with tests',
+    status: 'active' as const,
+    tokenBudget: 40_000,
+    tokensUsed: 1_200,
+    timeUsedSeconds: 90,
+    createdAt: 1,
+    updatedAt: 2,
+  }
+
+  it('loads, edits, pauses, and clears the selected thread goal', async () => {
+    installTestWindow()
+    gatewayMocks.resumeThread.mockResolvedValue({
+      model: 'gpt-5.5',
+      modelProvider: 'openai',
+      messages: [],
+      inProgress: false,
+      activeTurnId: '',
+      hasMoreOlder: false,
+      turnIndexByTurnId: {},
+    })
+    gatewayMocks.getThreadGoal.mockResolvedValue(activeGoal)
+    gatewayMocks.updateThreadGoal
+      .mockResolvedValueOnce({ ...activeGoal, objective: 'Keep every test green', updatedAt: 3 })
+      .mockResolvedValueOnce({ ...activeGoal, objective: 'Keep every test green', status: 'paused', updatedAt: 4 })
+
+    const state = useDesktopState()
+    await state.selectThread('goal-thread')
+
+    expect(gatewayMocks.getThreadGoal).toHaveBeenCalledWith('goal-thread')
+    expect(state.selectedThreadGoal.value).toEqual(activeGoal)
+
+    await state.editSelectedThreadGoal('  Keep every test green  ', 50_000)
+    expect(gatewayMocks.updateThreadGoal).toHaveBeenLastCalledWith('goal-thread', {
+      objective: 'Keep every test green',
+      status: 'active',
+      tokenBudget: 50_000,
+    })
+    expect(state.selectedThreadGoal.value?.objective).toBe('Keep every test green')
+
+    await state.setSelectedThreadGoalStatus('paused')
+    expect(gatewayMocks.updateThreadGoal).toHaveBeenLastCalledWith('goal-thread', { status: 'paused' })
+    expect(state.selectedThreadGoal.value?.status).toBe('paused')
+
+    await state.clearSelectedThreadGoal()
+    expect(gatewayMocks.clearThreadGoal).toHaveBeenCalledWith('goal-thread')
+    expect(state.selectedThreadGoal.value).toBe(null)
+  })
+
+  it('applies goal notifications without refreshing the thread list', () => {
+    installTestWindow()
+    let notificationHandler: ((notification: { method: string, params?: unknown }) => void) | undefined
+    gatewayMocks.subscribeCodexNotifications.mockImplementation((handler) => {
+      notificationHandler = handler as typeof notificationHandler
+      return vi.fn()
+    })
+
+    const state = useDesktopState()
+    state.primeSelectedThread('goal-thread')
+    state.startPolling()
+    expect(notificationHandler).toBeDefined()
+
+    notificationHandler!({
+      method: 'thread/goal/updated',
+      params: { threadId: 'goal-thread', goal: activeGoal },
+    })
+    expect(state.selectedThreadGoal.value).toEqual(activeGoal)
+
+    notificationHandler!({
+      method: 'thread/goal/cleared',
+      params: { threadId: 'goal-thread' },
+    })
+    expect(state.selectedThreadGoal.value).toBe(null)
+    expect(gatewayMocks.getThreadGroupsPage).not.toHaveBeenCalled()
+  })
+
+  it('sets a new-thread goal before starting its first turn', async () => {
+    installTestWindow()
+    gatewayMocks.startThread.mockResolvedValue({
+      threadId: 'goal-thread',
+      model: 'gpt-5.5',
+      modelProvider: 'openai',
+    })
+    gatewayMocks.updateThreadGoal.mockResolvedValue(activeGoal)
+    gatewayMocks.startThreadTurn.mockResolvedValue('turn-1')
+
+    const state = useDesktopState()
+    const threadId = await state.sendMessageToNewThread(
+      'Ship goal mode with tests',
+      '/tmp/project',
+      [],
+      [],
+      [],
+      { objective: 'Ship goal mode with tests', tokenBudget: 40_000 },
+    )
+    await Promise.resolve()
+
+    expect(threadId).toBe('goal-thread')
+    expect(gatewayMocks.updateThreadGoal).toHaveBeenCalledWith('goal-thread', {
+      objective: 'Ship goal mode with tests',
+      status: 'active',
+      tokenBudget: 40_000,
+    })
+    expect(gatewayMocks.startThreadTurn).toHaveBeenCalled()
+    expect(gatewayMocks.updateThreadGoal.mock.invocationCallOrder[0])
+      .toBeLessThan(gatewayMocks.startThreadTurn.mock.invocationCallOrder[0])
+    expect(state.selectedThreadGoal.value).toEqual(activeGoal)
+  })
 })
 
 describe('startup request deduplication', () => {

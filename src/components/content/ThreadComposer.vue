@@ -253,6 +253,18 @@
                 :class="{ 'is-on': isPlanModeSelected }"
               />
             </button>
+            <button
+              class="thread-composer-attach-setting"
+              type="button"
+              :disabled="isComposerConfigDisabled"
+              @click="onOpenGoal"
+            >
+              <span class="thread-composer-attach-setting-copy">
+                <span class="thread-composer-attach-setting-label">Goal</span>
+                <span class="thread-composer-attach-setting-description">Set a persistent outcome for this thread</span>
+              </span>
+              <span class="thread-composer-attach-setting-arrow" aria-hidden="true">›</span>
+            </button>
           </div>
         </div>
 
@@ -484,6 +496,7 @@ export type ThreadComposerExposed = {
 const emit = defineEmits<{
   submit: [payload: SubmitPayload]
   interrupt: []
+  goal: []
   'update:selected-collaboration-mode': [mode: CollaborationModeKind]
   'update:selected-model': [modelId: string]
   'update:selected-reasoning-effort': [effort: ReasoningEffort | '']
@@ -978,6 +991,11 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
 
 function setActiveInProgressMode(mode: 'steer' | 'queue'): void {
   activeInProgressMode.value = mode
+}
+
+function onOpenGoal(): void {
+  isAttachMenuOpen.value = false
+  emit('goal')
 }
 
 function replaceDraftState(payload: ComposerDraftPayload): void {
@@ -2180,6 +2198,10 @@ watch(
 
 .thread-composer-attach-setting-description {
   @apply mt-0.5 text-xs text-zinc-500;
+}
+
+.thread-composer-attach-setting-arrow {
+  @apply shrink-0 text-xl leading-none text-zinc-400;
 }
 
 .thread-composer-attach-switch {

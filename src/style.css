@@ -37,6 +37,45 @@
   @apply bg-zinc-950;
 }
 
+:root.dark .thread-goal-row {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .thread-goal-heading,
+:root.dark .thread-goal-meta,
+:root.dark .thread-goal-editor-heading span,
+:root.dark .thread-goal-budget,
+:root.dark .thread-goal-start small {
+  @apply text-zinc-400;
+}
+
+:root.dark .thread-goal-objective,
+:root.dark .thread-goal-editor-heading,
+:root.dark .thread-goal-start strong {
+  @apply text-zinc-100;
+}
+
+:root.dark .thread-goal-button {
+  @apply border-zinc-600 bg-zinc-800 text-zinc-200 hover:border-zinc-500 hover:bg-zinc-700;
+}
+
+:root.dark .thread-goal-button-primary {
+  @apply border-zinc-100 bg-zinc-100 text-zinc-900 hover:border-white hover:bg-white;
+}
+
+:root.dark .thread-goal-button-danger {
+  @apply text-rose-300 hover:border-rose-800 hover:bg-rose-950/50;
+}
+
+:root.dark .thread-goal-start {
+  @apply text-zinc-300 hover:bg-zinc-800;
+}
+
+:root.dark .thread-goal-objective-input,
+:root.dark .thread-goal-budget input {
+  @apply border-zinc-600 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-400 focus:ring-zinc-700;
+}
+
 :root.dark .sidebar-scrollable {
   @apply bg-zinc-900;
 }

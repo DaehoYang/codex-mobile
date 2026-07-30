@@ -98,6 +98,31 @@ export type DirectoryPluginSummary = {
   termsOfServiceUrl: string
 }
 
+export type ThreadGoalStatus =
+  | 'active'
+  | 'paused'
+  | 'blocked'
+  | 'usageLimited'
+  | 'budgetLimited'
+  | 'complete'
+
+export type ThreadGoal = {
+  threadId: string
+  objective: string
+  status: ThreadGoalStatus
+  tokenBudget: number | null
+  tokensUsed: number
+  timeUsedSeconds: number
+  createdAt: number
+  updatedAt: number
+}
+
+export type ThreadGoalUpdate = {
+  objective?: string
+  status?: ThreadGoalStatus
+  tokenBudget?: number | null
+}
+
 export type DirectoryPluginDetail = {
   summary: DirectoryPluginSummary
   description: string
@@ -1553,6 +1578,30 @@ export async function archiveThread(threadId: string): Promise<void> {
 
 export async function renameThread(threadId: string, threadName: string): Promise<void> {
   await callRpc('thread/name/set', { threadId, name: threadName })
+}
+
+export async function getThreadGoal(threadId: string): Promise<ThreadGoal | null> {
+  const payload = await callRpc<{ goal?: ThreadGoal | null }>('thread/goal/get', { threadId })
+  return payload?.goal ?? null
+}
+
+export async function updateThreadGoal(
+  threadId: string,
+  update: ThreadGoalUpdate,
+): Promise<ThreadGoal> {
+  const payload = await callRpc<{ goal?: ThreadGoal }>('thread/goal/set', {
+    threadId,
+    ...update,
+  })
+  if (!payload?.goal) {
+    throw new Error('thread/goal/set did not return a goal')
+  }
+  return payload.goal
+}
+
+export async function clearThreadGoal(threadId: string): Promise<boolean> {
+  const payload = await callRpc<{ cleared?: boolean }>('thread/goal/clear', { threadId })
+  return payload?.cleared === true
 }
 
 export async function rollbackThread(threadId: string, numTurns: number): Promise<UiMessage[]> {

@@ -940,6 +940,13 @@
                   @hide="onHideHomeTerminal"
                   @terminal-focus-change="onTerminalFocusChange"
                 />
+                <ThreadGoalRow
+                  ref="homeGoalRowRef"
+                  :goal="null"
+                  :busy="isSendingMessage"
+                  :can-create="false"
+                  @save="onSaveGoal"
+                />
                 <ThreadComposer ref="homeThreadComposerRef" :active-thread-id="composerThreadContextId"
                   :cwd="composerCwd"
                   :collaboration-modes="availableCollaborationModes"
@@ -957,6 +964,7 @@
                   :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
                   :dictation-language="dictationLanguage"
                   @submit="onSubmitThreadMessage"
+                  @goal="openGoalEditor"
                   @update:selected-collaboration-mode="onSelectCollaborationMode"
                   @update:selected-model="onSelectModel"
                   @update:selected-reasoning-effort="onSelectReasoningEffort"
@@ -1019,33 +1027,45 @@
                     :has-queue-above="selectedThreadQueuedMessages.length > 0"
                     @respond-server-request="onRespondServerRequest"
                   />
-                  <ThreadComposer
-                    v-else
-                    ref="threadComposerRef"
-                    :active-thread-id="composerThreadContextId"
-                    :cwd="composerCwd"
-                    :collaboration-modes="availableCollaborationModes"
-                    :selected-collaboration-mode="selectedCollaborationMode"
-                    :models="availableModelIds"
-                    :selected-model="composerSelectedModelId"
-                    :selected-reasoning-effort="selectedReasoningEffort"
-                    :selected-speed-mode="selectedSpeedMode"
-                    :is-updating-speed-mode="isUpdatingSpeedMode"
-                    :skills="installedSkills"
-                    :thread-token-usage="selectedThreadTokenUsage"
-                    :codex-quota="codexQuota"
-                    :is-turn-in-progress="isSelectedThreadInProgress"
-                    :is-stop-pending="isSelectedThreadInterruptPending"
-                    :is-interrupting-turn="isInterruptingTurn"
-                    :has-queue-above="selectedThreadQueuedMessages.length > 0"
-                    :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
-                    :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
-                    :dictation-language="dictationLanguage"
-                    @update:selected-collaboration-mode="onSelectCollaborationMode"
-                    @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
-                    @update:selected-reasoning-effort="onSelectReasoningEffort"
-                    @update:selected-speed-mode="onSelectSpeedMode"
-                    @interrupt="onInterruptTurn" />
+                  <template v-else>
+                    <ThreadGoalRow
+                      ref="threadGoalRowRef"
+                      :goal="selectedThreadGoal"
+                      :busy="isUpdatingSelectedThreadGoal"
+                      :can-create="false"
+                      @save="onSaveGoal"
+                      @pause="onPauseGoal"
+                      @resume="onResumeGoal"
+                      @clear="onClearGoal"
+                    />
+                    <ThreadComposer
+                      ref="threadComposerRef"
+                      :active-thread-id="composerThreadContextId"
+                      :cwd="composerCwd"
+                      :collaboration-modes="availableCollaborationModes"
+                      :selected-collaboration-mode="selectedCollaborationMode"
+                      :models="availableModelIds"
+                      :selected-model="composerSelectedModelId"
+                      :selected-reasoning-effort="selectedReasoningEffort"
+                      :selected-speed-mode="selectedSpeedMode"
+                      :is-updating-speed-mode="isUpdatingSpeedMode"
+                      :skills="installedSkills"
+                      :thread-token-usage="selectedThreadTokenUsage"
+                      :codex-quota="codexQuota"
+                      :is-turn-in-progress="isSelectedThreadInProgress"
+                      :is-stop-pending="isSelectedThreadInterruptPending"
+                      :is-interrupting-turn="isInterruptingTurn"
+                      :has-queue-above="selectedThreadQueuedMessages.length > 0"
+                      :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
+                      :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
+                      :dictation-language="dictationLanguage"
+                      @update:selected-collaboration-mode="onSelectCollaborationMode"
+                      @goal="openGoalEditor"
+                      @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
+                      @update:selected-reasoning-effort="onSelectReasoningEffort"
+                      @update:selected-speed-mode="onSelectSpeedMode"
+                      @interrupt="onInterruptTurn" />
+                  </template>
                 </div>
               </template>
             </div>
@@ -1173,6 +1193,7 @@ import DesktopLayout from './components/layout/DesktopLayout.vue'
 import SidebarThreadTree from './components/sidebar/SidebarThreadTree.vue'
 import ContentHeader from './components/content/ContentHeader.vue'
 import ThreadComposer from './components/content/ThreadComposer.vue'
+import ThreadGoalRow from './components/content/ThreadGoalRow.vue'
 import ThreadPendingRequestPanel from './components/content/ThreadPendingRequestPanel.vue'
 import QueuedMessages from './components/content/QueuedMessages.vue'
 import RateLimitStatus from './components/content/RateLimitStatus.vue'
@@ -1228,6 +1249,7 @@ import {
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
+import { parseGoalCommand, type GoalCommand } from './components/content/threadGoal'
 import type { GitCommitFileChange, GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
 import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider } from './api/codexGateway'
 import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathForUi } from './pathUtils.js'
@@ -1412,6 +1434,8 @@ const {
   projectDisplayNameById,
   selectedThread,
   selectedThreadTokenUsage,
+  selectedThreadGoal,
+  isUpdatingSelectedThreadGoal,
   selectedThreadTerminalOpen,
   selectedThreadServerRequests,
   selectedLiveOverlay,
@@ -1450,6 +1474,10 @@ const {
   forkThreadFromTurn,
   sendMessageToSelectedThread,
   sendMessageToNewThread,
+  createSelectedThreadGoal,
+  editSelectedThreadGoal,
+  setSelectedThreadGoalStatus,
+  clearSelectedThreadGoal,
   interruptSelectedThreadTurn,
   selectedThreadQueuedMessages,
   removeQueuedMessage,
@@ -1507,6 +1535,8 @@ function prepareFeedbackLink(event: MouseEvent, message?: string): void {
 }
 const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
+const homeGoalRowRef = ref<{ openEditor: () => void } | null>(null)
+const threadGoalRowRef = ref<{ openEditor: () => void } | null>(null)
 const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
 const homeTerminalPanelRef = ref<ThreadTerminalPanelExposed | null>(null)
 const threadTerminalPanelRef = ref<ThreadTerminalPanelExposed | null>(null)
@@ -3413,7 +3443,97 @@ async function syncAfterMobileResume(): Promise<void> {
   }
 }
 
-function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fileAttachments: Array<{ label: string; path: string; fsPath: string }>; skills: Array<{ name: string; path: string }>; mode: 'steer' | 'queue' }): void {
+type GoalSavePayload = { objective: string, tokenBudget: number | null }
+type ThreadMessagePayload = {
+  text: string
+  imageUrls: string[]
+  fileAttachments: Array<{ label: string, path: string, fsPath: string }>
+  skills: Array<{ name: string, path: string }>
+  mode: 'steer' | 'queue'
+}
+
+function openGoalEditor(): void {
+  const row = isHomeRoute.value ? homeGoalRowRef.value : threadGoalRowRef.value
+  row?.openEditor()
+}
+
+async function onSaveGoal(payload: GoalSavePayload): Promise<void> {
+  try {
+    if (isHomeRoute.value) {
+      await submitFirstMessageForNewThread(payload.objective, [], [], [], payload)
+      return
+    }
+    if (selectedThreadGoal.value) {
+      await editSelectedThreadGoal(payload.objective, payload.tokenBudget)
+    } else {
+      await createSelectedThreadGoal(payload.objective, payload.tokenBudget)
+    }
+  } catch {
+    // Goal errors are already reflected in shared state.
+  }
+}
+
+function onPauseGoal(): void {
+  void setSelectedThreadGoalStatus('paused').catch(() => {})
+}
+
+function onResumeGoal(): void {
+  void setSelectedThreadGoalStatus('active').catch(() => {})
+}
+
+function onClearGoal(): void {
+  void clearSelectedThreadGoal().catch(() => {})
+}
+
+async function handleGoalCommand(command: GoalCommand, payload: ThreadMessagePayload): Promise<void> {
+  if (command.kind === 'show') {
+    if (!selectedThreadGoal.value || isHomeRoute.value) openGoalEditor()
+    return
+  }
+  if (command.kind === 'edit') {
+    openGoalEditor()
+    return
+  }
+  if (command.kind === 'pause') {
+    if (!isHomeRoute.value) await setSelectedThreadGoalStatus('paused')
+    return
+  }
+  if (command.kind === 'resume') {
+    if (!isHomeRoute.value) await setSelectedThreadGoalStatus('active')
+    return
+  }
+  if (command.kind === 'clear') {
+    if (!isHomeRoute.value) await clearSelectedThreadGoal()
+    return
+  }
+
+  if (isHomeRoute.value) {
+    await submitFirstMessageForNewThread(
+      command.objective,
+      payload.imageUrls,
+      payload.skills,
+      payload.fileAttachments,
+      { objective: command.objective, tokenBudget: null },
+    )
+    return
+  }
+
+  await editSelectedThreadGoal(command.objective, selectedThreadGoal.value?.tokenBudget ?? null)
+  await sendMessageToSelectedThread(
+    command.objective,
+    payload.imageUrls,
+    payload.skills,
+    payload.mode,
+    payload.fileAttachments,
+  )
+}
+
+function onSubmitThreadMessage(payload: ThreadMessagePayload): void {
+  const goalCommand = parseGoalCommand(payload.text)
+  if (goalCommand) {
+    void handleGoalCommand(goalCommand, payload).catch(() => {})
+    return
+  }
   const text = payload.text
   scheduleMobileConversationJumpToLatest()
   const editingState = editingQueuedMessageState.value
@@ -4875,6 +4995,7 @@ async function submitFirstMessageForNewThread(
   imageUrls: string[] = [],
   skills: Array<{ name: string; path: string }> = [],
   fileAttachments: Array<{ label: string; path: string; fsPath: string }> = [],
+  goal?: GoalSavePayload,
 ): Promise<void> {
   try {
     worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
@@ -4903,7 +5024,7 @@ async function submitFirstMessageForNewThread(
       targetCwd = directory.cwd
       newThreadCwd.value = directory.cwd
     }
-    const threadId = await sendMessageToNewThread(text, targetCwd, imageUrls, skills, fileAttachments)
+    const threadId = await sendMessageToNewThread(text, targetCwd, imageUrls, skills, fileAttachments, goal)
     if (!threadId) return
     await router.replace({ name: 'thread', params: { threadId } })
     scheduleMobileConversationJumpToLatest()

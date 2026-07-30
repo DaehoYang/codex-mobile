@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getAvailableModelIds, getThreadDetail, listDirectoryComposioConnectors, resumeThread, startThreadTurn } from './codexGateway'
+import {
+  clearThreadGoal,
+  getAvailableModelIds,
+  getThreadDetail,
+  getThreadGoal,
+  listDirectoryComposioConnectors,
+  resumeThread,
+  startThreadTurn,
+  updateThreadGoal,
+} from './codexGateway'
 
 function mockRpcFetch(): { requests: Array<{ method: string, params: Record<string, unknown> }> } {
   const requests: Array<{ method: string, params: Record<string, unknown> }> = []
@@ -58,6 +67,59 @@ describe('startThreadTurn collaboration mode payloads', () => {
         developer_instructions: null,
       },
     })
+  })
+})
+
+describe('thread goals', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('uses the stable app-server goal RPCs', async () => {
+    const requests: Array<{ method: string, params: Record<string, unknown> }> = []
+    const goal = {
+      threadId: 'thread-1',
+      objective: 'Keep tests green',
+      status: 'active' as const,
+      tokenBudget: 40_000,
+      tokensUsed: 120,
+      timeUsedSeconds: 5,
+      createdAt: 1,
+      updatedAt: 2,
+    }
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { method: string, params: Record<string, unknown> }
+      requests.push(body)
+      const result = body.method === 'thread/goal/clear'
+        ? { cleared: true }
+        : { goal }
+      return new Response(JSON.stringify({ result }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    await expect(getThreadGoal('thread-1')).resolves.toEqual(goal)
+    await expect(updateThreadGoal('thread-1', {
+      objective: goal.objective,
+      status: 'active',
+      tokenBudget: 40_000,
+    })).resolves.toEqual(goal)
+    await expect(clearThreadGoal('thread-1')).resolves.toBe(true)
+
+    expect(requests).toEqual([
+      { method: 'thread/goal/get', params: { threadId: 'thread-1' } },
+      {
+        method: 'thread/goal/set',
+        params: {
+          threadId: 'thread-1',
+          objective: 'Keep tests green',
+          status: 'active',
+          tokenBudget: 40_000,
+        },
+      },
+      { method: 'thread/goal/clear', params: { threadId: 'thread-1' } },
+    ])
   })
 })
 
