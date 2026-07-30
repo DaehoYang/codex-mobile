@@ -37,7 +37,8 @@ Codex CLI 0.144.4
 (Codex Mobile `0.1.87`). `katex-equation-rendering.patch` contains only the
 conversation equation-rendering change from source commit `1ab53c4`.
 `markdown-file-preview.patch` contains the local Markdown preview change from
-source commit `93f6622`.
+source commit `93f6622`. `thread-goal-mode.patch` contains the goal API,
+state, command, and GUI change from source commit `5de721e`.
 
 The KaTeX patch has a deliberately narrow scope:
 
@@ -65,6 +66,21 @@ It depends on the KaTeX patch and is intended to be applied after both earlier
 patches. It also uses reduced patch context to limit conflicts with later
 upstream changes.
 
+The goal-mode patch:
+
+- uses Codex app-server's persisted `thread/goal/set`, `thread/goal/get`, and
+  `thread/goal/clear` methods;
+- adds a responsive progress row and inline editor above the composer;
+- exposes Goal in the composer **+** menu and supports `/goal` commands;
+- updates state directly from goal notifications without refreshing the
+  thread list or conversation; and
+- keeps ordinary chat usable with older Codex CLIs that do not expose goals.
+
+It was validated with Codex CLI `0.144.4` and is intended to be applied after
+the other three patches. The `feat/goal-mode` branch contains the integrated
+source; `personal/jupyterhub-deployment` still contains the first three
+patches until this feature is promoted.
+
 From a clean checkout at `fac2291`, apply the patches needed by the
 deployment. Applying the reverse-proxy patch first is the recommended order:
 
@@ -77,10 +93,13 @@ git apply /path/to/katex-equation-rendering.patch
 
 git apply --check /path/to/markdown-file-preview.patch
 git apply /path/to/markdown-file-preview.patch
+
+git apply --check /path/to/thread-goal-mode.patch
+git apply /path/to/thread-goal-mode.patch
 ```
 
-The ready-to-build branch already contains all three changes; do not reapply
-these patches after cloning that branch.
+Do not reapply a patch when the checked-out branch already contains its source
+commit.
 
 After a later upstream update, check each patch separately before modifying
 the worktree. If a normal application no longer succeeds, try a three-way
@@ -90,14 +109,18 @@ application:
 git apply --3way /path/to/jupyterhub-base-path.patch
 git apply --3way /path/to/katex-equation-rendering.patch
 git apply --3way /path/to/markdown-file-preview.patch
+git apply --3way /path/to/thread-goal-mode.patch
 ```
 
 The most likely equation-patch conflict point is
 `src/components/content/ThreadConversation.vue` if upstream changes its
 message parser or renderer. The most likely Markdown-preview conflict points
 are `src/server/httpServer.ts`, `src/server/localBrowseUi.ts`, and
-`vite.config.ts` if upstream changes local-file routing. Resolve any conflicts,
-reinstall dependencies, and rerun all tests before deployment.
+`vite.config.ts` if upstream changes local-file routing. The most likely
+goal-patch conflict points are `src/App.vue`,
+`src/components/content/ThreadComposer.vue`, and
+`src/composables/useDesktopState.ts`. Resolve any conflicts, reinstall
+dependencies, and rerun all tests before deployment.
 
 ## Build a package for a Docker image
 
