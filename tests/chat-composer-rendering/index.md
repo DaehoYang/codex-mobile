@@ -31,6 +31,7 @@ Return to the [manual test index](../../tests.md).
 | [Feature: Backticked bare filenames render as file links](backticked-bare-filenames-render-as-file-links.md) |
 | [Feature: Lazy message rendering (windowed conversation)](lazy-message-rendering-windowed-conversation.md) |
 | [Assistant generated image rendering](assistant-generated-image-rendering.md) |
+| [Angle-bracket Markdown images render](angle-bracket-markdown-images-render.md) |
 | [Stop button activates promptly for new threads](stop-button-activates-promptly-for-new-threads.md) |
 | [New-thread plan mode persists and toggles correctly](new-thread-plan-mode-persists-and-toggles-correctly.md) |
 | [Completed plan cards expose implement action](completed-plan-cards-expose-implement-action.md) |

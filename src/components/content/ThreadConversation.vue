@@ -942,6 +942,7 @@ import {
   renderMathToHtml,
   splitInlineMath,
 } from './messageMath'
+import { normalizeMarkdownImageDestination } from './messageImage'
 
 import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
@@ -3558,7 +3559,7 @@ function parseNonCodeMessageBlocks(text: string): MessageBlock[] {
 
     const start = match.index
     const end = start + fullMatch.length
-    const imageUrl = toRenderableImageUrl(urlRaw.trim())
+    const imageUrl = toRenderableImageUrl(normalizeMarkdownImageDestination(urlRaw))
     if (!imageUrl) continue
 
     if (start > cursor) {
