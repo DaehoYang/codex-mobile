@@ -152,10 +152,10 @@ For a fast Docker build, download the published launcher wheel after
 `jupyter-server-proxy` and the patched `codexapp` package are installed:
 
 ```dockerfile
-ADD https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-a29661d/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl \
+ADD https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-3fd3e8f/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl \
   /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl
 
-RUN echo "bdf6b30177e1606aaa4e931e277a603cc6b7df9fb2caefa688e6e0cfb98a44e2  /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl" \
+RUN echo "97c2f457fc9f2671532de8e5094cf0605a4f53027bd260912143c0ad8a904543  /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl" \
       | sha256sum -c - \
     && pip install --no-cache-dir \
       /tmp/jupyter_codexapp_proxy-0.1.0-py3-none-any.whl \
@@ -182,10 +182,10 @@ USER root
 
 ARG CODEX_CLI_VERSION=0.144.4
 
-ADD https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-a29661d/codexapp-0.1.87-jupyterhub-a29661d.tgz \
+ADD https://github.com/DaehoYang/codex-mobile/releases/download/jupyterhub-v0.1.87-3fd3e8f/codexapp-0.1.87-jupyterhub-3fd3e8f.tgz \
   /tmp/codexapp-patched.tgz
 
-RUN echo "1075410bd537114a6d7091fd883f00ef54cf180831826ba4eacd638e28452301  /tmp/codexapp-patched.tgz" \
+RUN echo "893ef3463245ed7e0ca32a9888b6e41884445de8e57295525b5d300c49e74350  /tmp/codexapp-patched.tgz" \
       | sha256sum -c - \
     && npm install -g \
       /tmp/codexapp-patched.tgz \
@@ -198,16 +198,13 @@ RUN echo "1075410bd537114a6d7091fd883f00ef54cf180831826ba4eacd638e28452301  /tmp
 # Restore the normal USER from the original Jupyter image here.
 ```
 
-The release is tied to source commit `a29661d`. Change both the release URL
+The release is tied to source commit `3fd3e8f`. Change both the release URL
 and checksum when selecting a newer deployment build.
 
-This package includes the KaTeX equation-rendering change. The launcher wheel
-is unchanged from the earlier deployment build, but is duplicated in this
-release so both Docker downloads use one release tag.
-
-This existing release predates the local Markdown preview change. Build and
-publish a newer package before expecting Markdown links to render in a
-deployed container.
+This package includes KaTeX equation rendering in conversations and local
+Markdown previews. The launcher wheel is unchanged in behavior from the
+earlier deployment build, but is duplicated in this release so both Docker
+downloads use one release tag.
 
 ## Rebuild from source inside Docker
 
